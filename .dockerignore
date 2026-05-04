@@ -1,0 +1,12 @@
+venv/
+.pytest_cache/
+histovar.egg-info/
+__pycache__/
+*.pyc
+*.vcf
+*.bam
+*.bai
+.DS_Store
+.git/
+.github/
+notebooks/
