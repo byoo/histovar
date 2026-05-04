@@ -46,6 +46,15 @@ Run the somatic caller on a matched tumor-normal pair using the Deep Learning en
 histovar somatic --tumor tumor.bam --normal normal.bam --model dl --out calls.vcf
 ```
 
+#### New Options:
+- `--tsv`: Output results in a tab-separated format (useful for downstream analysis in Excel/Pandas).
+- `--indels`: Enable discovery and scoring of insertions and deletions (experimental).
+
+Example with TSV and Indels:
+```bash
+histovar somatic --tumor tumor.bam --gtf ref.gtf --out results.tsv --indels
+```
+
 To run in **tumor-only mode**:
 ```bash
 histovar somatic --tumor tumor.bam --model dl --out tumor_only.vcf
