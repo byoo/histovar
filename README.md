@@ -1,82 +1,89 @@
 # Histovar
 
-Histovar is a specialized, paralog-aware somatic variant caller designed specifically for the duplicated histone H3 gene family. It accurately resolves ambiguous multi-mapping reads across highly homologous regions to call critical cancer hotspots (e.g., K27M, G34R/V, K36M) in diseases like Diffuse Midline Glioma.
+Histovar is a specialized, high-performance somatic variant caller explicitly designed to identify critical cancer hotspots (e.g., K27M, G34R/V) in the highly duplicated histone H3 gene family. Standard variant callers frequently fail or generate false positives in these regions due to mapping ambiguities. Histovar employs targeted statistical modeling and deep learning to confidently call variants across paralogous regions in diseases like Diffuse Midline Glioma (DMG).
 
-## Key Features
+## Key Algorithms
 
-- **Deep Learning Pileup Artifact Filtering**: Uses a PyTorch Multi-Layer Perceptron (`DeepHistovarNet`) to differentiate true variants from multi-mapping artifacts based on pileup signature matrices.
-- **Paralog-Aware Expectation-Maximization**: Utilizes an unsupervised EM algorithm to probabilistically assign multi-mapping reads to their true originating locus (e.g., distinguishing H3C14 from H3C15).
-- **BAM-native Parsing**: Scans for `XA` and `SA` tags to extract candidate multi-mapped loci directly from the aligner.
-- **Classic Machine Learning Rescoring**: Embeds Random Forest/Boosting models as a fallback to filter systematic mapping artifacts based on features like strand bias, MAPQ, and posterior gap confidence.
-- **Annotation-driven Hotspots**: Dynamically resolves coordinates for complex aliases (e.g., `H3F3A` -> `H3-3A`) and codon mappings across hg19, hg38, and T2T.
+- **Ultra-Fast BAM/CRAM Scanning**: Uses indexed `pysam.AlignmentFile` queries to perform a "fast-path" read-count check. This skips 99% of empty genomic coordinates in milliseconds without extracting complex pileups, dramatically speeding up execution.
+- **Codon-Aware Discovery**: Dynamically resolves modern (+1) and legacy amino acid nomenclatures to their 3-base genomic codons. It thoroughly scans all 3 bases of the codon to ensure it never misses second- or third-base mutations (e.g., K28M).
+- **Paralog-Aware Expectation-Maximization (EM)**: Uses an unsupervised EM algorithm to probabilistically assign multi-mapped reads to their true originating locus.
+  - Parses BWA `XA` tags to find alternate mapping locations.
+  - Uses a robust ±500bp padding logic around transcript boundaries to ensure reads mapping to UTRs or introns correctly link to the CDS.
+  - Automatically identifies reads with `MAPQ < 5` that lack `XA` tags (e.g., from DRAGEN or Bowtie2 aligners) and distributes them across known identical paralog clusters (like H3C14/H3C15).
+- **Deep Learning Pileup Artifact Filtering**: Differentiates true variants from systematic mapping artifacts using PyTorch (`DeepHistovarNet`) or Random Forest models based on MAPQ, strand bias, allele frequency, and the EM posterior gap.
 
-## Install
+---
+
+## Installation
+
+### Docker (Recommended)
+Histovar is available as a pre-built cross-platform (amd64/arm64) container.
+```bash
+docker pull byoo/histovar:latest
+```
 
 ### Local Environment
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-pip install torch  # Required for deep learning functionality
+pip install torch
 pip install -e .
 ```
 
-### Docker
-Alternatively, you can run Histovar entirely within a container to avoid environment dependencies:
+---
+
+## Usage
+
+Run the somatic caller. By default, it uses the Deep Learning (`dl`) engine and outputs a VCF file.
+
+### Basic Example (Docker)
+Ensure you mount your local data directory using the `-v` flag:
 ```bash
-docker build -t histovar:v2 .
+docker run --rm -v $(pwd):/data byoo/histovar:latest somatic \
+    --tumor /data/tumor.bam \
+    --gtf /data/MANE.GRCh38.v1.5.refseq_genomic.gtf.gz \
+    --out /data/results.tsv \
+    --tsv \
+    --genes ""
 ```
 
-## Training the ML Models
+### CLI Options
+- `--tumor`: Path to the tumor BAM/CRAM file.
+- `--normal`: (Optional) Path to the matched normal BAM/CRAM file for somatic subtraction.
+- `--gtf`: Path to the reference GTF (Supports Ensembl `chr1` and RefSeq `NC_000` chromosome formats).
+- `--out`: Path to the output VCF or TSV file.
+- `--tsv`: Flag to output results as a tab-separated TSV instead of VCF format.
+- `--genes`: Comma-separated list of genes to scan. **Default is `"H3C14,H3C15"` to speed up testing.** To scan the entire histone family (including `H3-3A` and `H3-3B`), set this to `--genes ""`.
+- `--fasta`: Path to the reference FASTA file. **Required if using CRAM files.**
+- `--indels`: Flag to enable discovery and scoring of insertions and deletions (experimental).
+- `--model`: ML scoring engine to use (`dl` for Deep Learning, `rf` for Random Forest).
+- `--build`: Genomic build (`hg38`, `hg19`).
 
-Histovar relies on supervised Machine Learning (PyTorch or Random Forest) to filter artifacts. Before using it on real samples, you must train the models using a simulated ground-truth dataset. 
+---
 
-*(Note: The EM algorithm for paralog assignment is an unsupervised statistical method and **does not** require training. It runs automatically on the fly before the ML step.)*
+## Interpreting the Output
+
+When running Histovar in `--tsv` mode, the output contains several highly informative columns:
+
+* **TUMOR_AF**: The Variant Allele Frequency in the tumor sample.
+* **ML**: The Deep Learning probability (0.0 to 1.0) that this is a true somatic mutation. Calls with `ML > 0.5` are marked as `PASS`.
+* **POST**: The EM algorithm's posterior probability (0.0 to 1.0). 
+  * `POST = 1.0`: The reads map uniquely and unambiguously to the specified gene.
+  * `POST < 0.2`: The reads perfectly multi-map to multiple paralogs, making the true origin highly ambiguous.
+* **GENES**: The gene where the mutation was called. If the `POST` score is highly ambiguous, Histovar merges the paralogs (e.g., `H3C14|H3C15`).
+* **EVENT / MATE_POS**: If an ambiguous mutation is detected across two paralogs, Histovar links them together. Both rows will share a deterministic `EVENT` ID (e.g., `ambig_K28_H3C14_H3C15`), and their `MATE_POS` columns will point to the exact genomic coordinate of the other paralog. 
+
+---
+
+## Training Custom ML Models
+Histovar relies on supervised Machine Learning to filter artifacts. The EM algorithm is unsupervised and runs on the fly, but the ML models must be trained on a simulated ground-truth dataset.
 
 1. **Simulate Data**: Generate synthetic BAMs containing true variants and known artifacts.
 2. **Train Models**: Execute a training script that passes pileup features into the `MLScorer.train(X, y)` function.
-3. **Save/Load Weights**: Save the resulting `.pt` (PyTorch) or `.pkl` (Scikit-Learn) files to deploy the trained model in production.
+3. **Deploy**: Save the resulting `.pt` or `.pkl` files and reference them in the pipeline.
 
-## Run
-
-### Local Execution
-
-Run the somatic caller on a matched tumor-normal pair using the Deep Learning engine (default):
+Evaluate your variant calling performance against a truth set at any time:
 ```bash
-histovar somatic --tumor tumor.bam --normal normal.bam --model dl --out calls.vcf
-```
-
-#### New Options:
-- `--tsv`: Output results in a tab-separated format (useful for downstream analysis in Excel/Pandas).
-- `--indels`: Enable discovery and scoring of insertions and deletions (experimental).
-
-Example with TSV and Indels:
-```bash
-histovar somatic --tumor tumor.bam --gtf ref.gtf --out results.tsv --indels
-```
-
-To run in **tumor-only mode**:
-```bash
-histovar somatic --tumor tumor.bam --model dl --out tumor_only.vcf
-```
-
-Alternatively, run using the classic Random Forest engine:
-```bash
-histovar somatic --tumor tumor.bam --normal normal.bam --model rf --out calls.vcf
-```
-
-Evaluate variant calling performance against a simulated truth set:
-```bash
-histovar benchmark
-```
-
-### Docker Execution
-To run Histovar using the container, you must mount your local data directory into the container using the `-v` flag:
-
-```bash
-docker run --rm -v $(pwd):/data histovar:v2 somatic \
-    --tumor /data/tumor.bam \
-    --normal /data/normal.bam \
-    --out /data/calls.vcf \
-    --model dl
+histovar benchmark --truth data/simulated_truth.tsv --vcf calls.vcf
 ```
