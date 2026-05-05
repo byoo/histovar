@@ -112,6 +112,8 @@ class ReferenceBuilder:
                 attr_str = parts[8]
                 
                 m = re.search(r'gene_name "([^"]+)"', attr_str)
+                if not m:
+                    m = re.search(r'gene "([^"]+)"', attr_str)
                 if not m: continue
                 gene_name = m.group(1)
                 
