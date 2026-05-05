@@ -124,9 +124,9 @@ def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=ty
                         # Fix ambiguity logic: if `gene` multi-mapped equally with canonical genes,
                         # ensure the specific gene is reported as primary instead of defaulting to H3C14/H3C15.
                         if mean_post_gap < 0.2:
-                            gene_prob = first_assign["z"].get(gene, 0)
+                            gene_prob = theta.get(gene, 0)
                             # If gene ties for the best probability
-                            if best_locus != gene and gene_prob >= (first_assign.get("best_prob", 0) - 0.05):
+                            if best_locus != gene and gene_prob >= (first_assign.get("prob", 0) - 0.05):
                                 alt_locus = best_locus
                                 best_locus = gene
                     else:
