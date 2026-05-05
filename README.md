@@ -54,7 +54,7 @@ docker run --rm -v $(pwd):/data byoo/histovar:latest somatic \
 - `--gtf`: Path to the reference GTF (Supports Ensembl `chr1` and RefSeq `NC_000` chromosome formats).
 - `--out`: Path to the output VCF or TSV file.
 - `--tsv`: Flag to output results as a tab-separated TSV instead of VCF format.
-- `--genes`: Comma-separated list of genes to scan. **Default is `"H3C14,H3C15"` to speed up testing.** To scan the entire histone family (including `H3-3A` and `H3-3B`), set this to `--genes ""`.
+- `--genes`: Comma-separated list of genes to scan. **Default is `"H3C14,H3C15"` to speed up testing.** To scan the entire histone family (including `H3-3A` and `H3-3B`), set this to `--genes "all"`.
 - `--fasta`: Path to the reference FASTA file. **Required if using CRAM files.**
 - `--min-reads`: Minimum number of alternate reads required to call a variant (Default: 2). Use higher values to reduce sequencing error sensitivity.
 - `--min-vaf`: Minimum Variant Allele Frequency (VAF) required to call a variant (Default: 0.01). Useful to filter out ultra-low frequency sequencing noise.
