@@ -27,7 +27,7 @@ def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=ty
     pileup = PileupParser(tumor_bam=tumor, normal_bam=normal if normal else None, include_indels=indels, fasta=fasta if fasta else None)
     
     print("Initializing EM Paralog Assigner...")
-    assigner = EMParalogAssigner(loci=["H3C14", "H3C15", "H3-3A"])
+    assigner = EMParalogAssigner(loci=list(ref.transcripts.keys()))
     
     print(f"Initializing ML Scorer (Model: {model})...")
     ml_scorer = MLScorer(model_type=model)
