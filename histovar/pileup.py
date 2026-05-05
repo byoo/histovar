@@ -61,7 +61,7 @@ class PileupParser:
         reads = []
         is_indel_target = '+' in alt or '-' in alt
         with pysam.AlignmentFile(bam_path, "rb", reference_filename=self.fasta) as samfile:
-            for pileupcolumn in samfile.pileup(chrom, pos-1, pos, truncate=True):
+            for pileupcolumn in samfile.pileup(chrom, pos-1, pos, truncate=True, multiple_iterators=False):
                 if pileupcolumn.pos == pos - 1:
                     for pileupread in pileupcolumn.pileups:
                         if pileupread.is_del or pileupread.is_refskip:
@@ -119,7 +119,7 @@ class PileupParser:
         """Scans pileup at a coordinate and identifies reference and alternate alleles."""
         counts = {}
         with pysam.AlignmentFile(self.tumor_bam, "rb", reference_filename=self.fasta) as samfile:
-            for pileupcolumn in samfile.pileup(chrom, pos-1, pos, truncate=True):
+            for pileupcolumn in samfile.pileup(chrom, pos-1, pos, truncate=True, multiple_iterators=False):
                 if pileupcolumn.pos == pos - 1:
                     for pileupread in pileupcolumn.pileups:
                         if pileupread.is_del or pileupread.is_refskip:
