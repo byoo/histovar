@@ -106,6 +106,13 @@ class ReferenceBuilder:
                 if len(parts) < 9 or parts[2] != 'CDS': continue
                 
                 chrom = parts[0]
+                if chrom.startswith('NC_0000'):
+                    try:
+                        num = int(chrom.split('.')[0].split('_')[1])
+                        if num == 23: chrom = 'chrX'
+                        elif num == 24: chrom = 'chrY'
+                        else: chrom = f'chr{num}'
+                    except: pass
                 start = int(parts[3])
                 end = int(parts[4])
                 strand = parts[6]
