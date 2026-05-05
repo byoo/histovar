@@ -142,24 +142,18 @@ def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=ty
                     }
                     
                     if mean_post_gap < 0.2 and alt_locus:
-                        info["GENES"] = f'{best_locus}|{alt_locus}'
-                        event_id = f'ambig_event_{event_counter}'
-                        info["EVENT"] = event_id
+                        info["GENES"] = f'{min(best_locus, alt_locus)}|{max(best_locus, alt_locus)}'
+                        info["EVENT"] = f'ambig_{hotspot_id}_{min(best_locus, alt_locus)}_{max(best_locus, alt_locus)}'
                         
                         alt_coords = ref.get_hotspot_coordinates(alt_locus, hotspot_id)
-                        
                         if alt_coords:
-                            # Primary record
-                            info["MATE_POS"] = f'{alt_coords["chrom"]}:{alt_coords["pos"]}'
-                            writer.write_record(chrom, pos, ref_allele, alt_allele, info, filter_val)
+                            idx = cand["codon_coords"].index(pos)
+                            mate_pos = alt_coords["codon_coords"][idx]
+                            info["MATE_POS"] = f'{alt_coords["chrom"]}:{mate_pos}'
                             
-                            # Alternate record
-                            alt_info = info.copy()
-                            alt_info["MATE_POS"] = f'{chrom}:{pos}'
-                            writer.write_record(alt_coords["chrom"], alt_coords["pos"], ref_allele, alt_allele, alt_info, filter_val)
-                            event_counter += 1
-                            continue
-                            
+                        writer.write_record(chrom, pos, ref_allele, alt_allele, info, filter_val)
+                        continue
+                        
                     # Standard write if not ambiguous
                     writer.write_record(chrom, pos, ref_allele, alt_allele, info, filter_val)
 
