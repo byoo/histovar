@@ -7,6 +7,15 @@ class PileupParser:
         self.normal_bam = normal_bam
         self.include_indels = include_indels
         self.fasta = fasta
+        self.tumor_samfile = pysam.AlignmentFile(self.tumor_bam, "rb", reference_filename=self.fasta)
+        self.normal_samfile = pysam.AlignmentFile(self.normal_bam, "rb", reference_filename=self.fasta) if self.normal_bam else None
+        
+    def close(self):
+        if self.tumor_samfile:
+            self.tumor_samfile.close()
+        if self.normal_samfile:
+            self.normal_samfile.close()
+
         
     def _parse_xa_tag(self, read):
         """Parse BWA XA tag to find multi-mapped candidate loci."""
@@ -56,12 +65,11 @@ class PileupParser:
             "pos_bias": pos_bias
         }
 
-    def _read_pileup(self, bam_path, chrom, pos, ref, alt):
+    def _read_pileup(self, samfile, chrom, pos, ref, alt):
         """Helper to extract read info from a bam file using pysam."""
         reads = []
         is_indel_target = '+' in alt or '-' in alt
-        with pysam.AlignmentFile(bam_path, "rb", reference_filename=self.fasta) as samfile:
-            for pileupcolumn in samfile.pileup(chrom, pos-1, pos, truncate=True, multiple_iterators=False):
+        for pileupcolumn in samfile.pileup(chrom, pos-1, pos, truncate=True, multiple_iterators=False):
                 if pileupcolumn.pos == pos - 1:
                     for pileupread in pileupcolumn.pileups:
                         if pileupread.is_del or pileupread.is_refskip:
@@ -97,12 +105,12 @@ class PileupParser:
 
     def fetch_pileup(self, chrom, pos, ref, alt):
         """Fetch pileup from BAM."""
-        tumor_reads = self._read_pileup(self.tumor_bam, chrom, pos, ref, alt)
+        tumor_reads = self._read_pileup(self.tumor_samfile, chrom, pos, ref, alt)
         tumor_features = self.extract_features(tumor_reads, pos)
         
         normal_features = {"depth": 0, "alt_depth": 0, "af": 0.0, "mapq": 0, "strand_bias": 0.5, "pos_bias": 0.5}
-        if self.normal_bam:
-            normal_reads = self._read_pileup(self.normal_bam, chrom, pos, ref, alt)
+        if self.normal_samfile:
+            normal_reads = self._read_pileup(self.normal_samfile, chrom, pos, ref, alt)
             normal_features = self.extract_features(normal_reads, pos)
             somatic_score = (tumor_features["af"] - normal_features["af"]) * tumor_features["depth"]
         else:
@@ -118,8 +126,7 @@ class PileupParser:
     def discover_variants(self, chrom, pos, min_alt_reads=2):
         """Scans pileup at a coordinate and identifies reference and alternate alleles."""
         counts = {}
-        with pysam.AlignmentFile(self.tumor_bam, "rb", reference_filename=self.fasta) as samfile:
-            for pileupcolumn in samfile.pileup(chrom, pos-1, pos, truncate=True, multiple_iterators=False):
+        for pileupcolumn in self.tumor_samfile.pileup(chrom, pos-1, pos, truncate=True, multiple_iterators=False):
                 if pileupcolumn.pos == pos - 1:
                     for pileupread in pileupcolumn.pileups:
                         if pileupread.is_del or pileupread.is_refskip:

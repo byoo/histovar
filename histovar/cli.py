@@ -149,6 +149,7 @@ def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=ty
 
             
     writer.close()
+    pileup.close()
     print(f'Wrote {output_fmt} to', out)
 
 @app.command()
