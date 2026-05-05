@@ -11,7 +11,7 @@ from .reference import ReferenceBuilder
 app=typer.Typer()
 
 @app.command()
-def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=typer.Option(...), out:str=typer.Option('calls.vcf'), build:str=typer.Option('hg38'), model:str=typer.Option('dl'), tsv:bool=typer.Option(False, "--tsv", help="Output in TSV format"), indels:bool=typer.Option(False, "--indels", help="Include insertions and deletions in variant discovery"), fasta:str=typer.Option('', help="Reference FASTA (required for CRAM support)")):
+def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=typer.Option(...), out:str=typer.Option('calls.vcf'), build:str=typer.Option('hg38'), model:str=typer.Option('dl'), tsv:bool=typer.Option(False, "--tsv", help="Output in TSV format"), indels:bool=typer.Option(False, "--indels", help="Include insertions and deletions in variant discovery"), fasta:str=typer.Option('', help="Reference FASTA (required for CRAM support)"), genes:str=typer.Option("H3C14,H3C15", help="Comma-separated list of genes to scan (default: H3C14,H3C15)")):
     print(f"Initializing Histovar v1.2 Somatic Caller (build: {build}, model: {model})")
     
     if not os.path.exists(tumor):
@@ -42,6 +42,11 @@ def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=ty
     event_counter = 1
     
     candidates = ref.get_all_hotspot_coordinates()
+    
+    if genes:
+        target_genes = [g.strip() for g in genes.split(',')]
+        candidates = [c for c in candidates if c["gene"] in target_genes]
+        
     print(f"Scanning BAM natively at {len(candidates)} known hotspot coordinates...")
     
     with typer.progressbar(candidates, label="Processing Candidates") as progress:
