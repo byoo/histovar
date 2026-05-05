@@ -45,7 +45,9 @@ def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=ty
     print(f"Scanning BAM natively at {len(candidates)} known hotspot coordinates...")
     
     with typer.progressbar(candidates, label="Processing Candidates") as progress:
-        for cand in progress:
+        for i, cand in enumerate(progress):
+            if i > 0 and i % 10000 == 0:
+                print(f"Processed {i} / {len(candidates)} candidates...")
             chrom = cand["chrom"]
             pos = cand["pos"]
             gene = cand["gene"]

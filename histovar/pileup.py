@@ -125,6 +125,14 @@ class PileupParser:
 
     def discover_variants(self, chrom, pos, min_alt_reads=2):
         """Scans pileup at a coordinate and identifies reference and alternate alleles."""
+        # FAST PATH: Instantly skip coordinates that don't even have enough reads to form an alt allele
+        try:
+            if self.tumor_samfile.count(chrom, pos-1, pos) < min_alt_reads:
+                return None, []
+        except Exception:
+            # Catch cases where chrom might not exist in the bam header
+            return None, []
+            
         counts = {}
         for pileupcolumn in self.tumor_samfile.pileup(chrom, pos-1, pos, truncate=True, multiple_iterators=False):
                 if pileupcolumn.pos == pos - 1:
