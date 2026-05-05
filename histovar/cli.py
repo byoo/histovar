@@ -51,7 +51,7 @@ def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=ty
     
     with typer.progressbar(candidates, label="Processing Candidates") as progress:
         for i, cand in enumerate(progress):
-            if i > 0 and i % 10000 == 0:
+            if i > 0 and i % 1000 == 0:
                 print(f"Processed {i} / {len(candidates)} candidates...")
             chrom = cand["chrom"]
             gene = cand["gene"]
@@ -117,8 +117,18 @@ def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=ty
                     
                     if assignments:
                         mean_post_gap = np.mean([a["gap"] for a in assignments.values()])
-                        best_locus = list(assignments.values())[0]["locus"]
-                        alt_locus = list(assignments.values())[0]["alt_locus"]
+                        first_assign = list(assignments.values())[0]
+                        best_locus = first_assign["locus"]
+                        alt_locus = first_assign["alt_locus"]
+                        
+                        # Fix ambiguity logic: if `gene` multi-mapped equally with canonical genes,
+                        # ensure the specific gene is reported as primary instead of defaulting to H3C14/H3C15.
+                        if mean_post_gap < 0.2:
+                            gene_prob = first_assign["z"].get(gene, 0)
+                            # If gene ties for the best probability
+                            if best_locus != gene and gene_prob >= (first_assign.get("best_prob", 0) - 0.05):
+                                alt_locus = best_locus
+                                best_locus = gene
                     else:
                         mean_post_gap = 1.0
                         best_locus = gene
@@ -137,7 +147,7 @@ def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=ty
                         "POST": round(mean_post_gap, 3),
                         "ML": round(ml_prob, 3),
                         "TUMOR_AF": round(p_res["tumor"]["af"], 3),
-                        "NORMAL_AF": round(p_res["normal"]["af"], 3),
+                        "NORMAL_AF": round(p_res["normal"]["af"], 3) if normal else "NA",
                         "SOMATIC_SCORE": round(p_res["somatic_score"], 3)
                     }
                     

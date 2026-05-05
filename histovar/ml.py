@@ -69,8 +69,18 @@ class MLScorer:
         
     def predict_proba(self, X_dicts):
         if not self.is_trained:
-            # Fallback mock probability for uninitialized/mock runs
-            return [0.98 for _ in X_dicts]
+            # Fallback heuristic probability for uninitialized/mock runs instead of returning exactly 0.98
+            probas = []
+            for d in X_dicts:
+                af = d.get("af", 0)
+                depth = d.get("depth", 0)
+                if depth >= 10 and af >= 0.05:
+                    probas.append(0.95)
+                elif depth >= 5 and af >= 0.01:
+                    probas.append(0.80)
+                else:
+                    probas.append(0.01)
+            return probas
             
         X = self._dict_to_array(X_dicts)
         
