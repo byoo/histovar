@@ -96,6 +96,15 @@ def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=ty
                                     xa_gene = ref.get_gene_from_pos(xa["chrom"], xa["pos"])
                                     if xa_gene:
                                         read_dict[xa_gene] = 1.0
+                            elif r.get("mapq", 0) < 5:
+                                # Fallback for BAMs without XA tags (e.g., DRAGEN)
+                                # If MAPQ is ~0, it multi-maps. Distribute to known identical paralogs.
+                                if gene in ["H3C14", "H3C15"]:
+                                    read_dict["H3C14"] = 1.0
+                                    read_dict["H3C15"] = 1.0
+                                elif gene in ["H3-3A", "H3-3B"]:
+                                    read_dict["H3-3A"] = 1.0
+                                    read_dict["H3-3B"] = 1.0
                             
                             # Normalize initial probabilities
                             total = sum(v for k,v in read_dict.items() if k != "read_id")
