@@ -16,7 +16,17 @@ class PileupParser:
         if self.normal_samfile:
             self.normal_samfile.close()
 
-        
+    def _get_bam_chrom(self, samfile, chrom):
+        if not samfile or chrom in samfile.references:
+            return chrom
+        alt1 = chrom.replace('chr', '')
+        if alt1 in samfile.references:
+            return alt1
+        alt2 = f'chr{chrom}'
+        if alt2 in samfile.references:
+            return alt2
+        return chrom
+
     def _parse_xa_tag(self, read):
         """Parse BWA XA tag to find multi-mapped candidate loci."""
         if not read.has_tag('XA'):
@@ -67,9 +77,10 @@ class PileupParser:
 
     def _read_pileup(self, samfile, chrom, pos, ref, alt):
         """Helper to extract read info from a bam file using pysam."""
+        bam_chrom = self._get_bam_chrom(samfile, chrom)
         reads = []
         is_indel_target = '+' in alt or '-' in alt
-        for pileupcolumn in samfile.pileup(chrom, pos-1, pos, truncate=True, multiple_iterators=False):
+        for pileupcolumn in samfile.pileup(bam_chrom, pos-1, pos, truncate=True, multiple_iterators=False):
                 if pileupcolumn.pos == pos - 1:
                     for pileupread in pileupcolumn.pileups:
                         if pileupread.is_del or pileupread.is_refskip:
@@ -125,16 +136,19 @@ class PileupParser:
 
     def discover_variants(self, chrom, pos, min_alt_reads=2):
         """Scans pileup at a coordinate and identifies reference and alternate alleles."""
+        bam_chrom = self._get_bam_chrom(self.tumor_samfile, chrom)
+        
         # FAST PATH: Instantly skip coordinates that don't even have enough reads to form an alt allele
         try:
-            if self.tumor_samfile.count(chrom, pos-1, pos) < min_alt_reads:
+            if self.tumor_samfile.count(bam_chrom, pos-1, pos) < min_alt_reads:
                 return None, []
-        except Exception:
+        except Exception as e:
             # Catch cases where chrom might not exist in the bam header
+            print(f"Warning: skipped {chrom}:{pos} -> {e}")
             return None, []
             
         counts = {}
-        for pileupcolumn in self.tumor_samfile.pileup(chrom, pos-1, pos, truncate=True, multiple_iterators=False):
+        for pileupcolumn in self.tumor_samfile.pileup(bam_chrom, pos-1, pos, truncate=True, multiple_iterators=False):
                 if pileupcolumn.pos == pos - 1:
                     for pileupread in pileupcolumn.pileups:
                         if pileupread.is_del or pileupread.is_refskip:
