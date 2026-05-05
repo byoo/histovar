@@ -145,7 +145,8 @@ def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=ty
                         info["GENES"] = f'{min(best_locus, alt_locus)}|{max(best_locus, alt_locus)}'
                         info["EVENT"] = f'ambig_{hotspot_id}_{min(best_locus, alt_locus)}_{max(best_locus, alt_locus)}'
                         
-                        alt_coords = ref.get_hotspot_coordinates(alt_locus, hotspot_id)
+                        target_mate_locus = best_locus if best_locus != gene else alt_locus
+                        alt_coords = ref.get_hotspot_coordinates(target_mate_locus, hotspot_id)
                         if alt_coords:
                             idx = cand["codon_coords"].index(pos)
                             mate_pos = alt_coords["codon_coords"][idx]
