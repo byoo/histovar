@@ -197,12 +197,12 @@ class ReferenceBuilder:
             "strand": tx["strand"]
         }
         
-    def get_gene_from_pos(self, chrom, pos):
-        """Map a raw genomic coordinate back to a gene name based on transcript bounds."""
+    def get_gene_from_pos(self, chrom, pos, pad=500):
+        """Map a raw genomic coordinate back to a gene name based on transcript bounds, with padding for read lengths."""
         for gene, tx in self.transcripts.items():
             if tx["chrom"] == chrom:
-                start = tx["cds_starts"][0]
-                end = tx["cds_ends"][-1]
+                start = tx["cds_starts"][0] - pad
+                end = tx["cds_ends"][-1] + pad
                 if start <= pos <= end:
                     return gene
         return None
@@ -210,17 +210,21 @@ class ReferenceBuilder:
     def get_all_hotspot_coordinates(self):
         """Returns a list of all potential hotspot genomic coordinates to scan."""
         candidates = []
+        seen = set()
         for gene in self.transcripts.keys():
             for hs_id, hs_info in HOTSPOTS.items():
                 coords = self.get_hotspot_coordinates(gene, hs_id)
                 if coords:
-                    candidates.append({
-                        "chrom": coords["chrom"],
-                        "pos": coords["pos"],
-                        "codon_coords": coords["codon_coords"],
-                        "strand": coords["strand"],
-                        "gene": gene,
-                        "hotspot_id": hs_id,
-                        "expected_aa": f"{hs_info['amino_acid']}{hs_info['pos']}"
-                    })
+                    key = f'{gene}:{coords["pos"]}'
+                    if key not in seen:
+                        seen.add(key)
+                        candidates.append({
+                            "chrom": coords["chrom"],
+                            "pos": coords["pos"],
+                            "codon_coords": coords["codon_coords"],
+                            "strand": coords["strand"],
+                            "gene": gene,
+                            "hotspot_id": hs_id,
+                            "expected_aa": f"{hs_info['amino_acid']}{hs_info['pos']}"
+                        })
         return candidates
