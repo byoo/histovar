@@ -138,9 +138,20 @@ class PileupParser:
         """Scans pileup at a coordinate and identifies reference and alternate alleles."""
         bam_chrom = self._get_bam_chrom(self.tumor_samfile, chrom)
         
-        # FAST PATH: Instantly skip coordinates that don't even have enough reads to form an alt allele
+        # ULTRA-FAST PATH: Instantly skip coordinates that are strictly homozygous wild-type
         try:
-            if self.tumor_samfile.count(bam_chrom, pos-1, pos) < min_alt_reads:
+            # count_coverage runs entirely in C (HTSlib) and is exponentially faster than pileup iterations.
+            A, C, G, T = self.tumor_samfile.count_coverage(bam_chrom, pos-1, pos, quality_threshold=20)
+            base_counts = [A[0], C[0], G[0], T[0]]
+            base_counts.sort(reverse=True)
+            
+            # If the second highest base has fewer than min_alt_reads, it's virtually 100% homozygous.
+            # If we aren't specifically looking for indels, we can skip the python pileup entirely!
+            if not self.include_indels and base_counts[1] < min_alt_reads:
+                return None, []
+                
+            # Fallback for indels or extremely low coverage
+            if sum(base_counts) < min_alt_reads:
                 return None, []
         except Exception as e:
             # Catch cases where chrom might not exist in the bam header
