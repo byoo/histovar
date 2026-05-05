@@ -11,7 +11,7 @@ from .reference import ReferenceBuilder
 app=typer.Typer()
 
 @app.command()
-def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=typer.Option(...), out:str=typer.Option('calls.vcf'), build:str=typer.Option('hg38'), model:str=typer.Option('dl'), tsv:bool=typer.Option(False, "--tsv", help="Output in TSV format"), indels:bool=typer.Option(False, "--indels", help="Include insertions and deletions in variant discovery")):
+def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=typer.Option(...), out:str=typer.Option('calls.vcf'), build:str=typer.Option('hg38'), model:str=typer.Option('dl'), tsv:bool=typer.Option(False, "--tsv", help="Output in TSV format"), indels:bool=typer.Option(False, "--indels", help="Include insertions and deletions in variant discovery"), fasta:str=typer.Option('', help="Reference FASTA (required for CRAM support)")):
     print(f"Initializing Histovar v1.2 Somatic Caller (build: {build}, model: {model})")
     
     if not os.path.exists(tumor):
@@ -23,8 +23,8 @@ def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=ty
     ref = ReferenceBuilder(build=build)
     ref.parse_gtf(gtf)
     
-    print(f"Initializing PileupParser (Indels: {indels})...")
-    pileup = PileupParser(tumor_bam=tumor, normal_bam=normal if normal else None, include_indels=indels)
+    print(f"Initializing PileupParser (Indels: {indels}, CRAM support: {'Yes' if fasta else 'No'})...")
+    pileup = PileupParser(tumor_bam=tumor, normal_bam=normal if normal else None, include_indels=indels, fasta=fasta if fasta else None)
     
     print("Initializing EM Paralog Assigner...")
     assigner = EMParalogAssigner(loci=["H3C14", "H3C15", "H3-3A"])
@@ -46,106 +46,107 @@ def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=ty
     
     with typer.progressbar(candidates, label="Processing Candidates") as progress:
         for cand in progress:
-        chrom = cand["chrom"]
-        pos = cand["pos"]
-        gene = cand["gene"]
-        hotspot_id = cand["hotspot_id"]
-        expected_aa = cand["expected_aa"]
-        
-        # Native Pileup Discovery
-        ref_allele, alt_alleles = pileup.discover_variants(chrom, pos)
-        if not ref_allele or not alt_alleles:
-            continue
+            chrom = cand["chrom"]
+            pos = cand["pos"]
+            gene = cand["gene"]
+            hotspot_id = cand["hotspot_id"]
+            expected_aa = cand["expected_aa"]
             
-        for alt_allele in alt_alleles:
-            # Reconstruct AA string (e.g. K27M) assuming VCF mutation corresponds to the dictionary
-            # In a full pipeline, codon translation would verify the exact amino acid
-            # For demonstration, we just grab the first expected variant for this hotspot
-            import histovar.reference as href
-            hotspot_def = href.HOTSPOTS.get(hotspot_id, {})
-            variants_list = hotspot_def.get("variants", ["X"])
-            target_mut = variants_list[0] if variants_list else "X"
-            
-            if "+" in alt_allele:
-                aa = f"{expected_aa}ins"
-            elif "-" in alt_allele:
-                aa = f"{expected_aa}del"
-            else:
-                aa = f"{expected_aa}{target_mut}"
-            
-            # 1. Fetch real pileup features and raw reads
-            p_res = pileup.fetch_pileup(chrom, pos, ref_allele, alt_allele)
-            tumor_reads = p_res["tumor_reads"]
-            
-            # 2. Build EM reads matrix dynamically from XA tags
-            reads_info = []
-            for r in tumor_reads:
-                if r["is_alt"]:
-                    # Primary mapping
-                    read_dict = {"read_id": r["read_id"], gene: 1.0}
-                    # Add XA alternate mappings
-                    if r.get("xa_loci"):
-                        for xa in r["xa_loci"]:
-                            xa_gene = ref.get_gene_from_pos(xa["chrom"], xa["pos"])
-                            if xa_gene:
-                                read_dict[xa_gene] = 1.0
-                    
-                    # Normalize initial probabilities
-                    total = sum(v for k,v in read_dict.items() if k != "read_id")
-                    for k in read_dict:
-                        if k != "read_id":
-                            read_dict[k] /= total
-                    reads_info.append(read_dict)
-                    
-            theta, assignments = assigner.fit_predict(reads_info)
-            
-            if assignments:
-                mean_post_gap = np.mean([a["gap"] for a in assignments.values()])
-                best_locus = list(assignments.values())[0]["locus"]
-                alt_locus = list(assignments.values())[0]["alt_locus"]
-            else:
-                mean_post_gap = 1.0
-                best_locus = gene
-                alt_locus = None
+            # Native Pileup Discovery
+            ref_allele, alt_alleles = pileup.discover_variants(chrom, pos)
+            if not ref_allele or not alt_alleles:
+                continue
                 
-            # 3. Score with ML
-            features = p_res["tumor"]
-            features["posterior_gap"] = mean_post_gap
-            ml_prob = ml_scorer.predict_proba([features])[0] if tumor_reads else 0.0
-            
-            # 4. Write
-            filter_val = "PASS" if ml_prob > 0.5 else "LowQual"
-            info = {
-                "AA": aa,
-                "GENES": gene,
-                "POST": round(mean_post_gap, 3),
-                "ML": round(ml_prob, 3),
-                "TUMOR_AF": round(p_res["tumor"]["af"], 3),
-                "NORMAL_AF": round(p_res["normal"]["af"], 3),
-                "SOMATIC_SCORE": round(p_res["somatic_score"], 3)
-            }
-            
-            if mean_post_gap < 0.2 and alt_locus:
-                info["GENES"] = f'{best_locus}|{alt_locus}'
-                event_id = f'ambig_event_{event_counter}'
-                info["EVENT"] = event_id
+            for alt_allele in alt_alleles:
+                # Reconstruct AA string (e.g. K27M) assuming VCF mutation corresponds to the dictionary
+                # In a full pipeline, codon translation would verify the exact amino acid
+                # For demonstration, we just grab the first expected variant for this hotspot
+                import histovar.reference as href
+                hotspot_def = href.HOTSPOTS.get(hotspot_id, {})
+                variants_list = hotspot_def.get("variants", ["X"])
+                target_mut = variants_list[0] if variants_list else "X"
                 
-                alt_coords = ref.get_hotspot_coordinates(alt_locus, hotspot_id)
+                if "+" in alt_allele:
+                    aa = f"{expected_aa}ins"
+                elif "-" in alt_allele:
+                    aa = f"{expected_aa}del"
+                else:
+                    aa = f"{expected_aa}{target_mut}"
                 
-                if alt_coords:
-                    # Primary record
-                    info["MATE_POS"] = f'{alt_coords["chrom"]}:{alt_coords["pos"]}'
-                    writer.write_record(chrom, pos, ref_allele, alt_allele, info, filter_val)
+                # 1. Fetch real pileup features and raw reads
+                p_res = pileup.fetch_pileup(chrom, pos, ref_allele, alt_allele)
+                tumor_reads = p_res["tumor_reads"]
+                
+                # 2. Build EM reads matrix dynamically from XA tags
+                reads_info = []
+                for r in tumor_reads:
+                    if r["is_alt"]:
+                        # Primary mapping
+                        read_dict = {"read_id": r["read_id"], gene: 1.0}
+                        # Add XA alternate mappings
+                        if r.get("xa_loci"):
+                            for xa in r["xa_loci"]:
+                                xa_gene = ref.get_gene_from_pos(xa["chrom"], xa["pos"])
+                                if xa_gene:
+                                    read_dict[xa_gene] = 1.0
+                        
+                        # Normalize initial probabilities
+                        total = sum(v for k,v in read_dict.items() if k != "read_id")
+                        for k in read_dict:
+                            if k != "read_id":
+                                read_dict[k] /= total
+                        reads_info.append(read_dict)
+                        
+                theta, assignments = assigner.fit_predict(reads_info)
+                
+                if assignments:
+                    mean_post_gap = np.mean([a["gap"] for a in assignments.values()])
+                    best_locus = list(assignments.values())[0]["locus"]
+                    alt_locus = list(assignments.values())[0]["alt_locus"]
+                else:
+                    mean_post_gap = 1.0
+                    best_locus = gene
+                    alt_locus = None
                     
-                    # Alternate record
-                    alt_info = info.copy()
-                    alt_info["MATE_POS"] = f'{chrom}:{pos}'
-                    writer.write_record(alt_coords["chrom"], alt_coords["pos"], ref_allele, alt_allele, alt_info, filter_val)
-                    event_counter += 1
-                    continue
+                # 3. Score with ML
+                features = p_res["tumor"]
+                features["posterior_gap"] = mean_post_gap
+                ml_prob = ml_scorer.predict_proba([features])[0] if tumor_reads else 0.0
+                
+                # 4. Write
+                filter_val = "PASS" if ml_prob > 0.5 else "LowQual"
+                info = {
+                    "AA": aa,
+                    "GENES": gene,
+                    "POST": round(mean_post_gap, 3),
+                    "ML": round(ml_prob, 3),
+                    "TUMOR_AF": round(p_res["tumor"]["af"], 3),
+                    "NORMAL_AF": round(p_res["normal"]["af"], 3),
+                    "SOMATIC_SCORE": round(p_res["somatic_score"], 3)
+                }
+                
+                if mean_post_gap < 0.2 and alt_locus:
+                    info["GENES"] = f'{best_locus}|{alt_locus}'
+                    event_id = f'ambig_event_{event_counter}'
+                    info["EVENT"] = event_id
                     
-            # Standard write if not ambiguous
-            writer.write_record(chrom, pos, ref_allele, alt_allele, info, filter_val)
+                    alt_coords = ref.get_hotspot_coordinates(alt_locus, hotspot_id)
+                    
+                    if alt_coords:
+                        # Primary record
+                        info["MATE_POS"] = f'{alt_coords["chrom"]}:{alt_coords["pos"]}'
+                        writer.write_record(chrom, pos, ref_allele, alt_allele, info, filter_val)
+                        
+                        # Alternate record
+                        alt_info = info.copy()
+                        alt_info["MATE_POS"] = f'{chrom}:{pos}'
+                        writer.write_record(alt_coords["chrom"], alt_coords["pos"], ref_allele, alt_allele, alt_info, filter_val)
+                        event_counter += 1
+                        continue
+                        
+                # Standard write if not ambiguous
+                writer.write_record(chrom, pos, ref_allele, alt_allele, info, filter_val)
+
             
     writer.close()
     print(f'Wrote {output_fmt} to', out)

@@ -2,10 +2,11 @@ import pysam
 import re
 
 class PileupParser:
-    def __init__(self, tumor_bam, normal_bam=None, include_indels=False):
+    def __init__(self, tumor_bam, normal_bam=None, include_indels=False, fasta=None):
         self.tumor_bam = tumor_bam
         self.normal_bam = normal_bam
         self.include_indels = include_indels
+        self.fasta = fasta
         
     def _parse_xa_tag(self, read):
         """Parse BWA XA tag to find multi-mapped candidate loci."""
@@ -59,7 +60,7 @@ class PileupParser:
         """Helper to extract read info from a bam file using pysam."""
         reads = []
         is_indel_target = '+' in alt or '-' in alt
-        with pysam.AlignmentFile(bam_path, "rb") as samfile:
+        with pysam.AlignmentFile(bam_path, "rb", reference=self.fasta) as samfile:
             for pileupcolumn in samfile.pileup(chrom, pos-1, pos, truncate=True):
                 if pileupcolumn.pos == pos - 1:
                     for pileupread in pileupcolumn.pileups:
@@ -117,7 +118,7 @@ class PileupParser:
     def discover_variants(self, chrom, pos, min_alt_reads=2):
         """Scans pileup at a coordinate and identifies reference and alternate alleles."""
         counts = {}
-        with pysam.AlignmentFile(self.tumor_bam, "rb") as samfile:
+        with pysam.AlignmentFile(self.tumor_bam, "rb", reference=self.fasta) as samfile:
             for pileupcolumn in samfile.pileup(chrom, pos-1, pos, truncate=True):
                 if pileupcolumn.pos == pos - 1:
                     for pileupread in pileupcolumn.pileups:
