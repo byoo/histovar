@@ -134,7 +134,7 @@ class PileupParser:
             "tumor_reads": tumor_reads
         }
 
-    def discover_variants(self, chrom, pos, min_alt_reads=2):
+    def discover_variants(self, chrom, pos, min_alt_reads=2, min_vaf=0.01):
         """Scans pileup at a coordinate and identifies reference and alternate alleles."""
         bam_chrom = self._get_bam_chrom(self.tumor_samfile, chrom)
         
@@ -144,15 +144,17 @@ class PileupParser:
             A, C, G, T = self.tumor_samfile.count_coverage(bam_chrom, pos-1, pos, quality_threshold=20)
             base_counts = [A[0], C[0], G[0], T[0]]
             base_counts.sort(reverse=True)
+            total_depth = sum(base_counts)
             
-            # If the second highest base has fewer than min_alt_reads, it's virtually 100% homozygous.
+            if total_depth == 0:
+                return None, []
+            
+            # If the second highest base has fewer than min_alt_reads OR falls below the sequencing error VAF threshold.
             # If we aren't specifically looking for indels, we can skip the python pileup entirely!
-            if not self.include_indels and base_counts[1] < min_alt_reads:
-                return None, []
-                
-            # Fallback for indels or extremely low coverage
-            if sum(base_counts) < min_alt_reads:
-                return None, []
+            if not self.include_indels:
+                alt_count = base_counts[1]
+                if alt_count < min_alt_reads or (alt_count / total_depth) < min_vaf:
+                    return None, []
         except Exception as e:
             # Catch cases where chrom might not exist in the bam header
             print(f"Warning: skipped {chrom}:{pos} -> {e}")
@@ -190,8 +192,10 @@ class PileupParser:
         ref_allele = sorted_bases[0][0]
         
         alt_alleles = []
-        for allele, count in counts.items():
-            if allele != ref_allele and count >= min_alt_reads:
-                alt_alleles.append(allele)
+        total_pileup_depth = sum(counts.values())
+        if total_pileup_depth > 0:
+            for allele, count in counts.items():
+                if allele != ref_allele and count >= min_alt_reads and (count / total_pileup_depth) >= min_vaf:
+                    alt_alleles.append(allele)
                 
         return ref_allele, alt_alleles

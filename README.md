@@ -56,6 +56,8 @@ docker run --rm -v $(pwd):/data byoo/histovar:latest somatic \
 - `--tsv`: Flag to output results as a tab-separated TSV instead of VCF format.
 - `--genes`: Comma-separated list of genes to scan. **Default is `"H3C14,H3C15"` to speed up testing.** To scan the entire histone family (including `H3-3A` and `H3-3B`), set this to `--genes ""`.
 - `--fasta`: Path to the reference FASTA file. **Required if using CRAM files.**
+- `--min-reads`: Minimum number of alternate reads required to call a variant (Default: 2). Use higher values to reduce sequencing error sensitivity.
+- `--min-vaf`: Minimum Variant Allele Frequency (VAF) required to call a variant (Default: 0.01). Useful to filter out ultra-low frequency sequencing noise.
 - `--indels`: Flag to enable discovery and scoring of insertions and deletions (experimental).
 - `--model`: ML scoring engine to use (`dl` for Deep Learning, `rf` for Random Forest).
 - `--build`: Genomic build (`hg38`, `hg19`).
@@ -66,13 +68,21 @@ docker run --rm -v $(pwd):/data byoo/histovar:latest somatic \
 
 When running Histovar in `--tsv` mode, the output contains several highly informative columns:
 
-* **TUMOR_AF**: The Variant Allele Frequency in the tumor sample.
-* **ML**: The Deep Learning probability (0.0 to 1.0) that this is a true somatic mutation. Calls with `ML > 0.5` are marked as `PASS`.
-* **POST**: The EM algorithm's posterior probability (0.0 to 1.0). 
+* **CHROM**: The chromosome where the variant is located.
+* **POS**: The exact genomic coordinate (1-based) of the variant.
+* **REF**: The reference sequence base.
+* **ALT**: The alternate (mutated) sequence base.
+* **FILTER**: The filter status of the variant (`PASS` if ML > 0.5, else `LowQual`).
+* **AA**: The amino acid substitution expected from this mutation (e.g., `K28M` or `G35R`).
+* **GENES**: The gene where the mutation was called. If the `POST` score is highly ambiguous, Histovar merges the paralogs (e.g., `H3C14|H3C15`).
+* **POST**: The Expectation-Maximization (EM) algorithm's posterior confidence gap (0.0 to 1.0). 
   * `POST = 1.0`: The reads map uniquely and unambiguously to the specified gene.
   * `POST < 0.2`: The reads perfectly multi-map to multiple paralogs, making the true origin highly ambiguous.
-* **GENES**: The gene where the mutation was called. If the `POST` score is highly ambiguous, Histovar merges the paralogs (e.g., `H3C14|H3C15`).
-* **EVENT / MATE_POS**: If an ambiguous mutation is detected across two paralogs, Histovar links them together. Both rows will share a deterministic `EVENT` ID (e.g., `ambig_K28_H3C14_H3C15`), and their `MATE_POS` columns will point to the exact genomic coordinate of the other paralog. 
+* **ML**: The Machine Learning probability (0.0 to 1.0) predicting whether this is a genuine biological mutation or a sequencing/mapping artifact. This is a complex score that evaluates multiple geometric and alignment properties (Depth, VAF, MAPQ, Strand Bias, Position Bias, and EM Posterior).
+* **TUMOR_AF**: The Variant Allele Frequency in the tumor sample.
+* **NORMAL_AF**: The Variant Allele Frequency in the matched normal sample. Reports `NA` if no normal BAM is provided.
+* **SOMATIC_SCORE**: A raw, deterministic heuristic mathematically calculated as `(TUMOR_AF - NORMAL_AF) * TUMOR_DEPTH`. Unlike `ML` which provides a confidence probability, `SOMATIC_SCORE` provides the raw magnitude of the tumor-normal frequency delta, strictly scaled by read depth.
+* **EVENT / MATE_POS**: If an ambiguous mutation is detected across two paralogs, Histovar links them together. Both rows will share a deterministic `EVENT` ID (e.g., `ambig_K28_H3C14_H3C15`), and their `MATE_POS` columns will accurately point to the exact genomic coordinate of the other paralog.
 
 ---
 

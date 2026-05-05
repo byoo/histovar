@@ -11,7 +11,7 @@ from .reference import ReferenceBuilder
 app=typer.Typer()
 
 @app.command()
-def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=typer.Option(...), out:str=typer.Option('calls.vcf'), build:str=typer.Option('hg38'), model:str=typer.Option('dl'), tsv:bool=typer.Option(False, "--tsv", help="Output in TSV format"), indels:bool=typer.Option(False, "--indels", help="Include insertions and deletions in variant discovery"), fasta:str=typer.Option('', help="Reference FASTA (required for CRAM support)"), genes:str=typer.Option("H3C14,H3C15", help="Comma-separated list of genes to scan (default: H3C14,H3C15)")):
+def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=typer.Option(...), out:str=typer.Option('calls.vcf'), build:str=typer.Option('hg38'), model:str=typer.Option('dl'), tsv:bool=typer.Option(False, "--tsv", help="Output in TSV format"), indels:bool=typer.Option(False, "--indels", help="Include insertions and deletions in variant discovery"), fasta:str=typer.Option('', help="Reference FASTA (required for CRAM support)"), genes:str=typer.Option("H3C14,H3C15", help="Comma-separated list of genes to scan (default: H3C14,H3C15)"), min_reads:int=typer.Option(2, "--min-reads", help="Minimum number of alternate reads required to call a variant"), min_vaf:float=typer.Option(0.01, "--min-vaf", help="Minimum variant allele frequency (VAF) required to call a variant")):
     print(f"Initializing Histovar v1.2 Somatic Caller (build: {build}, model: {model})")
     
     if not os.path.exists(tumor):
@@ -60,7 +60,7 @@ def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=ty
             
             for pos in cand["codon_coords"]:
                 # Native Pileup Discovery
-                ref_allele, alt_alleles = pileup.discover_variants(chrom, pos)
+                ref_allele, alt_alleles = pileup.discover_variants(chrom, pos, min_alt_reads=min_reads, min_vaf=min_vaf)
                 if not ref_allele or not alt_alleles:
                     continue
                 
