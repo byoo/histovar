@@ -84,13 +84,30 @@ class ReferenceBuilder:
         self.build = build
         self.transcripts = {}
 
+    def is_histone(self, gene_name, whitelist=None):
+        """Check if a gene name follows histone nomenclature (H1, H2A, H2B, H3, H4, HIST...) or is in whitelist."""
+        # 0. Check explicit whitelist
+        if whitelist and gene_name in whitelist:
+            return True
+
+        # 1. Check curated H3 map
+        for canonical, aliases in H3_GENES.items():
+            if gene_name == canonical or gene_name in aliases:
+                return True
+        
+        # 2. Pattern check (H1-H4, HIST, etc.)
+        # Matches H1, H2A, H2B, H3, H4, or HIST prefixes
+        if re.search(r'^(H[1-4][ABCDEF]?|HIST[1-5]H[1-4]|H[1-4]C[0-9])', gene_name, re.IGNORECASE):
+            return True
+        return False
+
     def get_canonical_name(self, gene_name):
         for canonical, aliases in H3_GENES.items():
             if gene_name == canonical or gene_name in aliases:
                 return canonical
         return gene_name
 
-    def parse_gtf(self, gtf_path):
+    def parse_gtf(self, gtf_path, whitelist=None):
         """Parse GTF to extract exon coordinates for Histone genes."""
         import os, gzip, re
         if not gtf_path or not os.path.exists(gtf_path):
@@ -124,6 +141,9 @@ class ReferenceBuilder:
                 if not m: continue
                 gene_name = m.group(1)
                 
+                if not self.is_histone(gene_name, whitelist=whitelist):
+                    continue
+                    
                 canonical = self.get_canonical_name(gene_name)
                 
                 if canonical not in cds_blocks:

@@ -19,9 +19,13 @@ def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=ty
     if not os.path.exists(gtf):
         raise FileNotFoundError(f"GTF file not found: {gtf}")
         
+    target_genes = []
+    if genes and genes.strip().lower() != "all":
+        target_genes = [g.strip() for g in genes.split(',')]
+
     print(f"Parsing GTF file: {gtf}...")
     ref = ReferenceBuilder(build=build)
-    ref.parse_gtf(gtf)
+    ref.parse_gtf(gtf, whitelist=target_genes if target_genes else None)
     
     print(f"Initializing PileupParser (Indels: {indels}, CRAM support: {'Yes' if fasta else 'No'})...")
     pileup = PileupParser(tumor_bam=tumor, normal_bam=normal if normal else None, include_indels=indels, fasta=fasta if fasta else None)
@@ -43,8 +47,7 @@ def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=ty
     
     candidates = ref.get_all_hotspot_coordinates()
     
-    if genes and genes.strip().lower() != "all":
-        target_genes = [g.strip() for g in genes.split(',')]
+    if target_genes:
         candidates = [c for c in candidates if c["gene"] in target_genes]
         
     print(f"Scanning BAM natively at {len(candidates)} known hotspot coordinates...")
