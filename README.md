@@ -23,6 +23,22 @@ Histovar is available as a pre-built cross-platform (amd64/arm64) container.
 docker pull byoo/histovar:latest
 ```
 
+### Apptainer / Singularity
+Apptainer (formerly Singularity) can run the Histovar Docker image directly. This is the preferred method for High-Performance Computing (HPC) clusters.
+
+```bash
+# Pull the image
+apptainer pull histovar.sif docker://byoo/histovar:latest
+
+# Run the caller
+apptainer run histovar.sif somatic \
+    --tumor tumor.bam \
+    --gtf MANE.GRCh38.v1.5.refseq_genomic.gtf.gz \
+    --out results.tsv \
+    --tsv \
+    --genes all
+```
+
 ### Local Environment
 ```bash
 python3 -m venv venv
