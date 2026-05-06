@@ -11,6 +11,7 @@ Histovar is a specialized, high-performance somatic variant caller explicitly de
   - Uses a robust ±500bp padding logic around transcript boundaries to ensure reads mapping to UTRs or introns correctly link to the CDS.
   - Automatically identifies reads with `MAPQ < 5` that lack `XA` tags (e.g., from DRAGEN or Bowtie2 aligners) and distributes them across known identical paralog clusters (like H3C14/H3C15).
 - **Deep Learning Pileup Artifact Filtering**: Differentiates true variants from systematic mapping artifacts using PyTorch (`DeepHistovarNet`) or Random Forest models based on MAPQ, strand bias, allele frequency, and the EM posterior gap.
+- **Automated Histone Filtering**: During GTF parsing, Histovar automatically filters for genes following standard histone nomenclature (`H1-H4`, `HIST...`). This prevents irrelevant genomic regions from being scanned and cluttering the results, while still allowing explicit gene whitelisting via the CLI.
 
 ---
 
