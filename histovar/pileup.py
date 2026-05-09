@@ -1,5 +1,6 @@
 import pysam
 import re
+import os
 
 class PileupParser:
     def __init__(self, tumor_bam, normal_bam=None, include_indels=False, fasta=None):
@@ -9,6 +10,7 @@ class PileupParser:
         self.fasta = fasta
         self.tumor_samfile = pysam.AlignmentFile(self.tumor_bam, "rb", reference_filename=self.fasta)
         self.normal_samfile = pysam.AlignmentFile(self.normal_bam, "rb", reference_filename=self.fasta) if self.normal_bam else None
+        self.fasta_obj = pysam.FastaFile(self.fasta) if self.fasta and os.path.exists(self.fasta) else None
         
     def close(self):
         if self.tumor_samfile:
@@ -138,23 +140,43 @@ class PileupParser:
         """Scans pileup at a coordinate and identifies reference and alternate alleles."""
         bam_chrom = self._get_bam_chrom(self.tumor_samfile, chrom)
         
+        # 1. Determine the TRUE reference allele
+        ref_allele = None
+        if self.fasta_obj:
+            try:
+                ref_allele = self.fasta_obj.fetch(bam_chrom, pos-1, pos).upper()
+            except Exception:
+                pass
+        
+        if not ref_allele and self.normal_samfile:
+            try:
+                A, C, G, T = self.normal_samfile.count_coverage(bam_chrom, pos-1, pos, quality_threshold=20)
+                norm_counts = {'A': A[0], 'C': C[0], 'G': G[0], 'T': T[0]}
+                if sum(norm_counts.values()) > 0:
+                    ref_allele = sorted(norm_counts.items(), key=lambda x: x[1], reverse=True)[0][0]
+            except Exception:
+                pass
+
         # ULTRA-FAST PATH: Instantly skip coordinates that are strictly homozygous wild-type
         try:
-            # count_coverage runs entirely in C (HTSlib) and is exponentially faster than pileup iterations.
             A, C, G, T = self.tumor_samfile.count_coverage(bam_chrom, pos-1, pos, quality_threshold=20)
-            base_counts = [A[0], C[0], G[0], T[0]]
-            base_counts.sort(reverse=True)
-            total_depth = sum(base_counts)
+            tumor_counts = {'A': A[0], 'C': C[0], 'G': G[0], 'T': T[0]}
+            total_depth = sum(tumor_counts.values())
             
             if total_depth == 0:
                 return None, []
             
-            # If the second highest base has fewer than min_alt_reads OR falls below the sequencing error VAF threshold.
-            # If we aren't specifically looking for indels, we can skip the python pileup entirely!
+            if not ref_allele:
+                ref_allele = sorted(tumor_counts.items(), key=lambda x: x[1], reverse=True)[0][0]
+
             if not self.include_indels:
-                alt_count = base_counts[1]
-                if alt_count < min_alt_reads or (alt_count / total_depth) < min_vaf:
-                    return None, []
+                has_alt = False
+                for base, count in tumor_counts.items():
+                    if base != ref_allele and count >= min_alt_reads and (count / total_depth) >= min_vaf:
+                        has_alt = True
+                        break
+                if not has_alt:
+                    return ref_allele, []
         except Exception as e:
             # Catch cases where chrom might not exist in the bam header
             print(f"Warning: skipped {chrom}:{pos} -> {e}")
@@ -181,16 +203,8 @@ class PileupParser:
                             counts[indel_allele] = counts.get(indel_allele, 0) + 1
         
         if not counts:
-            return None, []
+            return ref_allele, []
             
-        # Ref is assumed to be the most frequent base (filtering out indels)
-        base_counts = {k: v for k, v in counts.items() if '+' not in k and '-' not in k}
-        if not base_counts:
-            return None, []
-            
-        sorted_bases = sorted(base_counts.items(), key=lambda x: x[1], reverse=True)
-        ref_allele = sorted_bases[0][0]
-        
         alt_alleles = []
         total_pileup_depth = sum(counts.values())
         if total_pileup_depth > 0:
