@@ -78,7 +78,7 @@ class MLScorer:
                 post_gap = d.get("posterior_gap", 1.0)
                 
                 # Continuous heuristic score
-                score = af * min(depth / 20.0, 1.0) * min(mapq / 40.0, 1.0) * post_gap
+                score = af * min(depth / 20.0, 1.0) * min(mapq / 40.0, 1.0)
                 # Scale it so a good variant gets > 0.5
                 score = min(0.99, max(0.01, score * 5.0))
                 
