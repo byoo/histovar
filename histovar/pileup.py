@@ -125,7 +125,24 @@ class PileupParser:
         if self.normal_samfile:
             normal_reads = self._read_pileup(self.normal_samfile, chrom, pos, ref, alt)
             normal_features = self.extract_features(normal_reads, pos)
-            somatic_score = (tumor_features["af"] - normal_features["af"]) * tumor_features["depth"]
+            
+            # Somatic Log-Likelihood Ratio (LLR)
+            # H0: Germline (normal VAF = tumor VAF)
+            # H1: Somatic (normal VAF = sequencing error rate e ~ 0.002)
+            n_depth = normal_features["depth"]
+            n_alt = normal_features["alt_depth"]
+            t_af = max(0.005, min(0.995, tumor_features["af"]))
+            error_rate = 0.002
+            
+            if n_depth > 0:
+                import math
+                llr_alt = n_alt * math.log(error_rate / t_af)
+                llr_ref = (n_depth - n_alt) * math.log((1 - error_rate) / (1 - t_af))
+                somatic_score = llr_alt + llr_ref
+                # Phred-scale the log-likelihood ratio
+                somatic_score = max(0.0, somatic_score * 10.0 / math.log(10))
+            else:
+                somatic_score = tumor_features["af"] * tumor_features["depth"]
         else:
             somatic_score = tumor_features["af"] * tumor_features["depth"]
             

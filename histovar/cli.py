@@ -11,8 +11,8 @@ from .reference import ReferenceBuilder
 app=typer.Typer()
 
 @app.command()
-def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=typer.Option(...), out:str=typer.Option('calls.vcf'), build:str=typer.Option('hg38'), model:str=typer.Option('dl'), tsv:bool=typer.Option(False, "--tsv", help="Output in TSV format"), indels:bool=typer.Option(False, "--indels", help="Include insertions and deletions in variant discovery"), fasta:str=typer.Option('', help="Reference FASTA (required for CRAM support)"), genes:str=typer.Option("H3C14,H3C15", help="Comma-separated list of genes to scan, or 'all' (default: H3C14,H3C15)"), min_reads:int=typer.Option(2, "--min-reads", help="Minimum number of alternate reads required to call a variant"), min_vaf:float=typer.Option(0.01, "--min-vaf", help="Minimum variant allele frequency (VAF) required to call a variant")):
-    print(f"Initializing Histovar v1.2 Somatic Caller (build: {build}, model: {model})")
+def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=typer.Option(...), out:str=typer.Option('calls.vcf'), build:str=typer.Option('hg38'), model:str=typer.Option('dl'), tsv:bool=typer.Option(False, "--tsv", help="Output in TSV format"), indels:bool=typer.Option(False, "--indels", help="Include insertions and deletions in variant discovery"), fasta:str=typer.Option('', help="Reference FASTA (required for CRAM support)"), genes:str=typer.Option("all", help="Comma-separated list of genes to scan, or 'all' (default: all)"), min_reads:int=typer.Option(2, "--min-reads", help="Minimum number of alternate reads required to call a variant"), min_vaf:float=typer.Option(0.01, "--min-vaf", help="Minimum variant allele frequency (VAF) required to call a variant"), pad:int=typer.Option(500, "--pad", help="Padding in bp around transcript bounds")):
+    print(f"Initializing Histovar v1.0.0 Somatic Caller (build: {build}, model: {model})")
     
     if not os.path.exists(tumor):
         raise FileNotFoundError(f"Tumor BAM not found: {tumor}")
@@ -96,7 +96,7 @@ def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=ty
                             # Add XA alternate mappings
                             if r.get("xa_loci"):
                                 for xa in r["xa_loci"]:
-                                    xa_gene = ref.get_gene_from_pos(xa["chrom"], xa["pos"])
+                                    xa_gene = ref.get_gene_from_pos(xa["chrom"], xa["pos"], pad=pad)
                                     if xa_gene:
                                         read_dict[xa_gene] = 1.0
                             elif r.get("mapq", 0) < 5:

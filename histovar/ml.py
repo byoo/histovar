@@ -74,12 +74,15 @@ class MLScorer:
             for d in X_dicts:
                 af = d.get("af", 0)
                 depth = d.get("depth", 0)
-                if depth >= 10 and af >= 0.05:
-                    probas.append(0.95)
-                elif depth >= 5 and af >= 0.01:
-                    probas.append(0.80)
-                else:
-                    probas.append(0.01)
+                mapq = d.get("mapq", 0)
+                post_gap = d.get("posterior_gap", 1.0)
+                
+                # Continuous heuristic score
+                score = af * min(depth / 20.0, 1.0) * min(mapq / 40.0, 1.0) * post_gap
+                # Scale it so a good variant gets > 0.5
+                score = min(0.99, max(0.01, score * 5.0))
+                
+                probas.append(score)
             return probas
             
         X = self._dict_to_array(X_dicts)
