@@ -2,7 +2,7 @@
 
 Histovar is a somatic variant caller for cancer hotspots (e.g., K27M, G34R/V) in duplicated histone H3 genes. It uses statistical modeling and deep learning to call variants across paralogous regions.
 
-## Key Algorithms
+## How It Works
 
 - **BAM/CRAM Scanning**: Uses indexed `pysam.AlignmentFile` queries for read-count checks. This skips empty coordinates to speed up execution.
 - **Codon-Aware Discovery**: Resolves amino acid nomenclatures to 3-base codons. It scans all bases of the codon to detect mutations.
@@ -95,18 +95,19 @@ apptainer run histovar.sif somatic \
 ```
 
 ### CLI Options
-- `--tumor`: Path to tumor BAM/CRAM.
-- `--normal`: (Optional) Path to matched normal BAM/CRAM for somatic subtraction.
-- `--gtf`: Path to reference GTF.
-- `--out`: Path to output VCF or TSV.
-- `--tsv`: Output as TSV instead of VCF.
-- `--genes`: Comma-separated list of genes. Default: `"all"`. Use a comma-separated list (e.g., `"H3C14,H3C15"`) to restrict to specific genes.
-- `--fasta`: Path to reference FASTA. Required for CRAM files.
-- `--min-reads`: Minimum alternate reads (Default: 2).
-- `--min-vaf`: Minimum VAF (Default: 0.01).
-- `--indels`: Enable indel discovery (experimental).
-- `--model`: ML engine (`dl` or `rf`).
-- `--build`: Genomic build (`hg38`, `hg19`).
+- `--tumor`: Path to the tumor BAM/CRAM alignment file. (Required)
+- `--normal`: Path to the matched normal BAM/CRAM alignment file for somatic subtraction. (Optional)
+- `--gtf`: Path to the reference gene annotation GTF file (can be `.gtf` or `.gtf.gz`). (Required)
+- `--out`: Path to the output file (defaults to `calls.vcf`).
+- `--tsv`: Flag to output in TSV format instead of VCF. (Default: False)
+- `--genes`: Comma-separated list of genes to scan (e.g., `"H3C14,H3C15"`), or `"all"` to scan all histones. (Default: `"all"`)
+- `--fasta`: Path to the reference genome FASTA file. (Required when using CRAM input files)
+- `--min-reads`: Minimum number of alternate reads required supporting a variant to call it. (Default: 2)
+- `--min-vaf`: Minimum variant allele frequency (VAF) required to call a variant. (Default: 0.01)
+- `--pad`: Padding in base pairs around transcript boundaries to include mapping reads. (Default: 500)
+- `--indels`: Flag to enable indel (insertions and deletions) discovery. (Default: False)
+- `--model`: Machine learning engine to use for filtering (`dl` for Deep Learning, `rf` for Random Forest). (Default: `dl`)
+- `--build`: Reference genome build assembly (`hg38` or `hg19`). (Default: `hg38`)
 
 ---
 
