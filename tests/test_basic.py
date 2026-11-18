@@ -1,6 +1,6 @@
 import pytest
 from histovar.paralog import EMParalogAssigner
-from histovar.reference import ReferenceBuilder
+from histovar.reference import ReferenceBuilder, format_codon_aa_change
 from histovar.ml import MLScorer
 
 def test_em_algorithm():
@@ -56,3 +56,20 @@ def test_deep_learning_scorer():
     assert len(probas) == 2
     assert 0.0 <= probas[0] <= 1.0
     assert 0.0 <= probas[1] <= 1.0
+
+def test_codon_aa_translation():
+    # Plus strand: AAG (K) -> ATG (M), AGG (R), AAA (K, synonymous), AAT (N)
+    assert format_codon_aa_change(["A", "A", "G"], "+", 1, "T", 28, "K") == "K28M"
+    assert format_codon_aa_change(["A", "A", "G"], "+", 1, "G", 28, "K") == "K28R"
+    assert format_codon_aa_change(["A", "A", "G"], "+", 2, "A", 28, "K") == "K28K"
+    assert format_codon_aa_change(["A", "A", "G"], "+", 2, "T", 28, "K") == "K28N"
+
+    # Minus strand: coding AAG (K) has genomic bases ['T', 'T', 'C'] at codon_coords [pos0, pos1, pos2]
+    # Mutating middle genomic base T -> A gives coding ATG (M)
+    assert format_codon_aa_change(["T", "T", "C"], "-", 1, "A", 28, "K") == "K28M"
+    # Mutating third coding base (codon_idx=2, genomic C -> A) gives coding AAT (N) -> K28N, not K28M
+    assert format_codon_aa_change(["T", "T", "C"], "-", 2, "A", 28, "K") == "K28N"
+
+    # Indels
+    assert format_codon_aa_change(["A", "A", "G"], "+", 1, "A+TG", 28, "K") == "K28ins"
+    assert format_codon_aa_change(["A", "A", "G"], "+", 1, "A-3", 28, "K") == "K28del"

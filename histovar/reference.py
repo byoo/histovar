@@ -48,6 +48,32 @@ def reverse_complement(seq):
     mapping = str.maketrans('ATCGN', 'TAGCN')
     return seq.upper().translate(mapping)[::-1]
 
+def format_codon_aa_change(ref_genomic_bases, strand, codon_idx, alt_allele, codon_pos, expected_ref_aa=None):
+    """Translate reference and alternate 3-base codon into an amino-acid substitution label (e.g., K28M)."""
+    ref_prefix = f"{expected_ref_aa}{codon_pos}" if expected_ref_aa else f"X{codon_pos}"
+    if "+" in alt_allele:
+        return f"{ref_prefix}ins"
+    if "-" in alt_allele:
+        return f"{ref_prefix}del"
+    if len(ref_genomic_bases) != 3 or any(b not in "ACGT" for b in ref_genomic_bases):
+        return f"{ref_prefix}X"
+
+    alt_genomic_bases = list(ref_genomic_bases)
+    alt_genomic_bases[codon_idx] = alt_allele.upper()
+
+    if strand == "-":
+        ref_coding = "".join(reverse_complement(b) for b in ref_genomic_bases)
+        alt_coding = "".join(reverse_complement(b) for b in alt_genomic_bases)
+    else:
+        ref_coding = "".join(ref_genomic_bases)
+        alt_coding = "".join(alt_genomic_bases)
+
+    ref_aa = translate_codon(ref_coding)
+    alt_aa = translate_codon(alt_coding)
+    if ref_aa == "X" and expected_ref_aa:
+        ref_aa = expected_ref_aa
+    return f"{ref_aa}{codon_pos}{alt_aa}"
+
 HOTSPOTS = {
     # H3 Hotspots (Note: DNA pos is +1 from legacy nomenclature due to initiator Methionine)
     "R26": {"amino_acid": "R", "pos": 27, "variants": []}, 

@@ -6,7 +6,7 @@ from .tsv import TSVWriter
 from .pileup import PileupParser
 from .paralog import EMParalogAssigner
 from .ml import MLScorer
-from .reference import ReferenceBuilder
+from .reference import ReferenceBuilder, format_codon_aa_change, HOTSPOTS
 
 app=typer.Typer()
 
@@ -60,28 +60,36 @@ def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=ty
             gene = cand["gene"]
             hotspot_id = cand["hotspot_id"]
             expected_aa = cand["expected_aa"]
+            strand = cand.get("strand", "+")
+            codon_coords = cand["codon_coords"]
+            hotspot_def = HOTSPOTS.get(hotspot_id, {})
+            codon_pos = hotspot_def.get("pos", 0)
+            expected_ref_aa = hotspot_def.get("amino_acid", "X")
+            ref_codon_bases = None
             
-            for pos in cand["codon_coords"]:
+            for codon_idx, pos in enumerate(codon_coords):
                 # Native Pileup Discovery
                 ref_allele, alt_alleles = pileup.discover_variants(chrom, pos, min_alt_reads=min_reads, min_vaf=min_vaf)
                 if not ref_allele or not alt_alleles:
                     continue
                 
+                if ref_codon_bases is None:
+                    ref_codon_bases = [
+                        ref_allele if idx == codon_idx else pileup.get_reference_base(chrom, c_pos)
+                        for idx, c_pos in enumerate(codon_coords)
+                    ]
+                else:
+                    ref_codon_bases[codon_idx] = ref_allele
+                
                 for alt_allele in alt_alleles:
-                    # Reconstruct AA string (e.g. K27M) assuming VCF mutation corresponds to the dictionary
-                    # In a full pipeline, codon translation would verify the exact amino acid
-                    # For demonstration, we just grab the first expected variant for this hotspot
-                    import histovar.reference as href
-                    hotspot_def = href.HOTSPOTS.get(hotspot_id, {})
-                    variants_list = hotspot_def.get("variants", ["X"])
-                    target_mut = variants_list[0] if variants_list else "X"
-                    
-                    if "+" in alt_allele:
-                        aa = f"{expected_aa}ins"
-                    elif "-" in alt_allele:
-                        aa = f"{expected_aa}del"
-                    else:
-                        aa = f"{expected_aa}{target_mut}"
+                    aa = format_codon_aa_change(
+                        ref_codon_bases,
+                        strand=strand,
+                        codon_idx=codon_idx,
+                        alt_allele=alt_allele,
+                        codon_pos=codon_pos,
+                        expected_ref_aa=expected_ref_aa,
+                    )
                     
                     # 1. Fetch real pileup features and raw reads
                     p_res = pileup.fetch_pileup(chrom, pos, ref_allele, alt_allele)

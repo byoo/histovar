@@ -230,3 +230,34 @@ class PileupParser:
                     alt_alleles.append(allele)
                 
         return ref_allele, alt_alleles
+
+    def get_reference_base(self, chrom, pos):
+        """Determine the reference base at a 1-based genomic coordinate."""
+        bam_chrom = self._get_bam_chrom(self.tumor_samfile, chrom)
+        if self.fasta_obj:
+            try:
+                base = self.fasta_obj.fetch(bam_chrom, pos-1, pos).upper()
+                if base and base in ('A', 'C', 'G', 'T'):
+                    return base
+            except Exception:
+                pass
+
+        if self.normal_samfile:
+            try:
+                norm_chrom = self._get_bam_chrom(self.normal_samfile, chrom)
+                A, C, G, T = self.normal_samfile.count_coverage(norm_chrom, pos-1, pos, quality_threshold=20)
+                norm_counts = {'A': A[0], 'C': C[0], 'G': G[0], 'T': T[0]}
+                if sum(norm_counts.values()) > 0:
+                    return sorted(norm_counts.items(), key=lambda x: x[1], reverse=True)[0][0]
+            except Exception:
+                pass
+
+        try:
+            A, C, G, T = self.tumor_samfile.count_coverage(bam_chrom, pos-1, pos, quality_threshold=20)
+            tumor_counts = {'A': A[0], 'C': C[0], 'G': G[0], 'T': T[0]}
+            if sum(tumor_counts.values()) > 0:
+                return sorted(tumor_counts.items(), key=lambda x: x[1], reverse=True)[0][0]
+        except Exception:
+            pass
+
+        return 'N'
