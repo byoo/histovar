@@ -14,9 +14,9 @@ H3_GENES = {
     "H3C10": ["HIST1H3H"],
     "H3C11": ["HIST1H3I"],
     "H3C12": ["HIST1H3J"],
-    "H3C13": ["HIST2H3C"],
-    "H3C14": ["HIST2H3A"],
-    "H3C15": ["HIST2H3D"],
+    "H3C13": ["HIST2H3D"],
+    "H3C14": ["HIST2H3C"],
+    "H3C15": ["HIST2H3A"],
 }
 
 CODON_TABLE = {

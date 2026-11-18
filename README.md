@@ -30,7 +30,7 @@ Histovar explicitly maps and supports canonical H3 genes and their common aliase
 * **H3-3A** (`H3F3A`, `H3.3A`)
 * **H3-3B** (`H3F3B`, `H3.3B`)
 * **H3C1-H3C12** (e.g. `HIST1H3A` - `HIST1H3J`)
-* **H3C13-H3C15** (e.g. `HIST2H3C`, `HIST2H3A`, `HIST2H3D`)
+* **H3C13-H3C15** (`HIST2H3D`, `HIST2H3C`, `HIST2H3A`)
 *(Other H1, H2A, H2B, and H4 histone genes matching the pattern `^(H[1-4][ABCDEF]?|HIST[1-5]H[1-4]|H[1-4]C[0-9])` are scanned dynamically when configured)*
 
 ### Predefined Hotspots

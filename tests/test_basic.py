@@ -25,6 +25,9 @@ def test_reference_builder():
     ref = ReferenceBuilder(build="hg38")
     assert ref.get_canonical_name("H3F3A") == "H3-3A"
     assert ref.get_canonical_name("HIST1H3B") == "H3C2"
+    assert ref.get_canonical_name("HIST2H3D") == "H3C13"
+    assert ref.get_canonical_name("HIST2H3C") == "H3C14"
+    assert ref.get_canonical_name("HIST2H3A") == "H3C15"
     
     import os
     with open("dummy.gtf", "w") as f:
