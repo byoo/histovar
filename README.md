@@ -140,3 +140,19 @@ Benchmark performance:
 ```bash
 histovar benchmark --truth data/simulated_truth.tsv --vcf calls.vcf
 ```
+
+---
+
+## Validation
+
+Histovar was validated on a cohort of **377 paired tumor–normal pediatric cancer cases** profiled with short-read sequencing (SRS):
+
+- **Control Sensitivity**: Detected all 4 known `H3-3A` K28M (p.Lys28Met / legacy K27M, `c.83A>T`) diffuse midline glioma (DMG) positive controls.
+- **Rescued Paralog Variant in a Discordant Case**: In a clinically challenging DMG case that was H3K27M-positive by immunohistochemistry (IHC) with concurrent H3K27me3 loss—but negative by standard clinical SRS variant calling—Histovar rescued an undetected K28M mutation (`TUMOR_AF = 0.331`, `NORMAL_AF = 0.000`) mapping equally to the identical paralog pair `H3C14|H3C15` (`HIST2H3C` / `HIST2H3A`). Orthogonal PacBio HiFi long-read sequencing spanning the divergent flanking sequence definitively localized the variant to **`H3C15` (`HIST2H3A`)** (24/40 reads, 60% VAF in tumor; 0/20 in normal).
+- **Specificity & Somatic Separation**: Inherited polymorphisms at hotspot codons (~50% VAF in both tumor and matched normal) were assigned a somatic score of `0.0`, and none of the 12 H3-wild-type high-grade gliomas in the cohort had a false-positive somatic H3 hotspot call. One additional `H3C11` K28M variant (`TUMOR_AF = 0.199`, `NORMAL_AF = 0.000`) of uncertain clinical significance was identified in a Wilms tumor.
+
+---
+
+## License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.

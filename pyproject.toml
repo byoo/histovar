@@ -1,6 +1,7 @@
 [project]
 name="histovar"
 version="1.2.0"
+license={file="LICENSE"}
 dependencies=["pysam","pandas","numpy","scikit-learn","typer","pytest","matplotlib","torch"]
 
 [project.scripts]
