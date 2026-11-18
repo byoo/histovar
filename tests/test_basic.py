@@ -29,11 +29,27 @@ def test_reference_builder():
     import os
     with open("dummy.gtf", "w") as f:
         f.write('chr1\tHAVANA\tCDS\t1000\t1500\t.\t+\t0\tgene_name "H3F3A"; transcript_id "ENST001";\n')
+        f.write('chr6\tHAVANA\tCDS\t2000\t2500\t.\t+\t0\tgene_name "H3C11"; transcript_id "ENST002";\n')
+        f.write('chr6\tHAVANA\tCDS\t3000\t3500\t.\t+\t0\tgene_name "H2BC12"; transcript_id "ENST003";\n')
+        f.write('chr6\tHAVANA\tCDS\t4000\t4500\t.\t+\t0\tgene_name "H2AC8"; transcript_id "ENST004";\n')
         
     ref.parse_gtf("dummy.gtf")
     coords = ref.get_hotspot_coordinates("H3-3A", "K27")
     assert coords is not None
     assert coords["chrom"] == "chr1"
+
+    # H2A/H2B hotspots must not be applied to H3 genes (and vice versa)
+    assert ref.get_hotspot_coordinates("H3C11", "G53") is None
+    assert ref.get_hotspot_coordinates("H3C11", "E92") is None
+    assert ref.get_hotspot_coordinates("H2BC12", "G53") is not None
+    assert ref.get_hotspot_coordinates("H2BC12", "K27") is None
+    assert ref.get_hotspot_coordinates("H2AC8", "E92") is not None
+    assert ref.get_hotspot_coordinates("H2AC8", "G53") is None
+
+    all_cands = ref.get_all_hotspot_coordinates()
+    h3_hs = {c["hotspot_id"] for c in all_cands if c["gene"].startswith("H3")}
+    assert "G53" not in h3_hs
+    assert "E92" not in h3_hs
     
     os.remove("dummy.gtf")
 

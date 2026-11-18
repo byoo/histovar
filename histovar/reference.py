@@ -76,33 +76,29 @@ def format_codon_aa_change(ref_genomic_bases, strand, codon_idx, alt_allele, cod
 
 HOTSPOTS = {
     # H3 Hotspots (Note: DNA pos is +1 from legacy nomenclature due to initiator Methionine)
-    "R26": {"amino_acid": "R", "pos": 27, "variants": []}, 
-    "R27": {"amino_acid": "R", "pos": 27, "variants": []}, # New nomenclature for R26
+    "R26": {"family": "H3", "amino_acid": "R", "pos": 27, "variants": []}, 
+    "R27": {"family": "H3", "amino_acid": "R", "pos": 27, "variants": []}, # New nomenclature for R26
     
-    "K27": {"amino_acid": "K", "pos": 28, "variants": ["M", "I"]},
-    "K28": {"amino_acid": "K", "pos": 28, "variants": ["M", "I"]}, # New nomenclature for K27
+    "K27": {"family": "H3", "amino_acid": "K", "pos": 28, "variants": ["M", "I"]},
+    "K28": {"family": "H3", "amino_acid": "K", "pos": 28, "variants": ["M", "I"]}, # New nomenclature for K27
     
-    "S28": {"amino_acid": "S", "pos": 29, "variants": ["C"]},
-    "S29": {"amino_acid": "S", "pos": 29, "variants": ["C"]}, # New nomenclature for S28
+    "S28": {"family": "H3", "amino_acid": "S", "pos": 29, "variants": ["C"]},
+    "S29": {"family": "H3", "amino_acid": "S", "pos": 29, "variants": ["C"]}, # New nomenclature for S28
     
-    "G34": {"amino_acid": "G", "pos": 35, "variants": ["R", "V", "W"]},
-    "G35": {"amino_acid": "G", "pos": 35, "variants": ["R", "V", "W"]}, # New nomenclature for G34
+    "G34": {"family": "H3", "amino_acid": "G", "pos": 35, "variants": ["R", "V", "W"]},
+    "G35": {"family": "H3", "amino_acid": "G", "pos": 35, "variants": ["R", "V", "W"]}, # New nomenclature for G34
     
-    "K36": {"amino_acid": "K", "pos": 37, "variants": ["M"]},
-    "K37": {"amino_acid": "K", "pos": 37, "variants": ["M"]}, # New nomenclature for K36
+    "K36": {"family": "H3", "amino_acid": "K", "pos": 37, "variants": ["M"]},
+    "K37": {"family": "H3", "amino_acid": "K", "pos": 37, "variants": ["M"]}, # New nomenclature for K36
     
     # H2A Hotspots (e.g. Carcinosarcomas)
-    "E92": {"amino_acid": "E", "pos": 92, "variants": ["K"]},
-    "E121": {"amino_acid": "E", "pos": 121, "variants": ["Q"]},
+    "E92": {"family": "H2A", "amino_acid": "E", "pos": 92, "variants": ["K"]},
+    "E121": {"family": "H2A", "amino_acid": "E", "pos": 121, "variants": ["Q"]},
     
     # H2B Hotspots (e.g. Carcinosarcomas)
-    "G53": {"amino_acid": "G", "pos": 53, "variants": ["D"]},
-    "E76": {"amino_acid": "E", "pos": 76, "variants": ["K", "Q"]},
-    "E113": {"amino_acid": "E", "pos": 113, "variants": ["K"]},
-    
-    # H1 Hotspots (Diffuse large B-cell lymphomas)
-    # Generic placeholders - specific variants (like S102) can be added when specified
-    "H1_GENERIC": {"amino_acid": "X", "pos": 0, "variants": []}
+    "G53": {"family": "H2B", "amino_acid": "G", "pos": 53, "variants": ["D"]},
+    "E76": {"family": "H2B", "amino_acid": "E", "pos": 76, "variants": ["K", "Q"]},
+    "E113": {"family": "H2B", "amino_acid": "E", "pos": 113, "variants": ["K"]},
 }
 
 class ReferenceBuilder:
@@ -132,6 +128,21 @@ class ReferenceBuilder:
             if gene_name == canonical or gene_name in aliases:
                 return canonical
         return gene_name
+
+    def get_histone_family(self, gene_name):
+        """Determine the histone family (H1, H2A, H2B, H3, H4) for a gene."""
+        canonical = self.get_canonical_name(gene_name).upper()
+        if canonical in H3_GENES or re.match(r'^(H3|HIST[1-5]H3)', canonical):
+            return "H3"
+        if re.match(r'^(H2A|HIST[1-5]H2A)', canonical):
+            return "H2A"
+        if re.match(r'^(H2B|HIST[1-5]H2B)', canonical):
+            return "H2B"
+        if re.match(r'^(H1|HIST[1-5]H1)', canonical):
+            return "H1"
+        if re.match(r'^(H4|HIST[1-5]H4)', canonical):
+            return "H4"
+        return None
 
     def parse_gtf(self, gtf_path, whitelist=None):
         """Parse GTF to extract exon coordinates for Histone genes."""
@@ -221,11 +232,19 @@ class ReferenceBuilder:
     def get_hotspot_coordinates(self, gene_name, hotspot_id):
         """Map protein hotspot (e.g. K27) to genomic coordinates."""
         gene = self.get_canonical_name(gene_name)
-        if gene not in self.transcripts:
+        if gene not in self.transcripts or hotspot_id not in HOTSPOTS:
             return None
         
+        hs_info = HOTSPOTS[hotspot_id]
+        hs_family = hs_info.get("family")
+        gene_family = self.get_histone_family(gene)
+        if hs_family and hs_family != gene_family:
+            return None
+        if hs_info["pos"] <= 0:
+            return None
+
         tx = self.transcripts[gene]
-        base_offset = (HOTSPOTS[hotspot_id]["pos"] - 1) * 3
+        base_offset = (hs_info["pos"] - 1) * 3
         
         codon_coords = []
         for i in range(3):
@@ -233,7 +252,7 @@ class ReferenceBuilder:
             if pos is not None:
                 codon_coords.append(pos)
                 
-        if not codon_coords:
+        if len(codon_coords) < 3:
             return None
             
         return {
