@@ -11,8 +11,8 @@ from .reference import ReferenceBuilder, format_codon_aa_change, HOTSPOTS
 app=typer.Typer()
 
 @app.command()
-def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=typer.Option(...), out:str=typer.Option('calls.vcf'), build:str=typer.Option('hg38'), model:str=typer.Option('dl'), tsv:bool=typer.Option(False, "--tsv", help="Output in TSV format"), indels:bool=typer.Option(False, "--indels", help="Include insertions and deletions in variant discovery"), fasta:str=typer.Option('', help="Reference FASTA (required for CRAM support)"), genes:str=typer.Option("all", help="Comma-separated list of genes to scan, or 'all' (default: all)"), min_reads:int=typer.Option(2, "--min-reads", help="Minimum number of alternate reads required to call a variant"), min_vaf:float=typer.Option(0.01, "--min-vaf", help="Minimum variant allele frequency (VAF) required to call a variant"), pad:int=typer.Option(500, "--pad", help="Padding in bp around transcript bounds")):
-    print(f"Initializing Histovar v1.0.0 Somatic Caller (build: {build}, model: {model})")
+def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=typer.Option(...), out:str=typer.Option('calls.vcf'), build:str=typer.Option('hg38'), model:str=typer.Option('heuristic', help="Scoring engine: 'heuristic' (default) or 'dl'/'rf'/'boosting'/'lr' with --model-path"), model_path:str=typer.Option('', "--model-path", help="Path to a pre-trained model weights file (.pt or .pkl)"), tsv:bool=typer.Option(False, "--tsv", help="Output in TSV format"), indels:bool=typer.Option(False, "--indels", help="Include insertions and deletions in variant discovery"), fasta:str=typer.Option('', help="Reference FASTA (required for CRAM support)"), genes:str=typer.Option("all", help="Comma-separated list of genes to scan, or 'all' (default: all)"), min_reads:int=typer.Option(2, "--min-reads", help="Minimum number of alternate reads required to call a variant"), min_vaf:float=typer.Option(0.01, "--min-vaf", help="Minimum variant allele frequency (VAF) required to call a variant"), pad:int=typer.Option(500, "--pad", help="Padding in bp around transcript bounds")):
+    print(f"Initializing Histovar v1.2.0 Somatic Caller (build: {build}, model: {model})")
     
     if not os.path.exists(tumor):
         raise FileNotFoundError(f"Tumor BAM not found: {tumor}")
@@ -33,8 +33,10 @@ def somatic(tumor:str=typer.Option(...), normal:str=typer.Option(''), gtf:str=ty
     print("Initializing EM Paralog Assigner...")
     assigner = EMParalogAssigner(loci=list(ref.transcripts.keys()))
     
-    print(f"Initializing ML Scorer (Model: {model})...")
-    ml_scorer = MLScorer(model_type=model)
+    print(f"Initializing Scorer (Model: {model})...")
+    if model != "heuristic" and not model_path:
+        print(f"Warning: --model '{model}' specified without --model-path; falling back to heuristic scoring.")
+    ml_scorer = MLScorer(model_type=model if (model == "heuristic" or model_path) else "heuristic", model_path=model_path if model_path else None)
     
     if tsv or out.endswith('.tsv'):
         writer = TSVWriter(out)

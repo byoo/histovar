@@ -1,6 +1,6 @@
 # Histovar
 
-Histovar is a somatic variant caller for cancer hotspots (e.g., K27M, G34R/V) in duplicated histone H3 genes. It uses statistical modeling and deep learning to call variants across paralogous regions.
+Histovar is a somatic variant caller for cancer hotspots (e.g., K27M, G34R/V) in duplicated histone H3 genes. It uses Expectation-Maximization (EM) paralog resolution and statistical somatic modeling to call variants across highly homologous regions.
 
 ## How It Works
 
@@ -14,7 +14,7 @@ Histovar is a somatic variant caller for cancer hotspots (e.g., K27M, G34R/V) in
 - **Somatic Scoring**: Evaluates the somatic probability of a variant using a Binomial Log-Likelihood Ratio (LLR) model.
   - Compares the somatic hypothesis ($H_1$, normal variant allele frequency (VAF) matches a sequencing error rate $e \approx 0.002$) against the germline hypothesis ($H_0$, normal VAF matches tumor VAF).
   - The LLR is Phred-scaled (`10 * log10(odds)`) to represent confidence. If a variant is highly present in the normal sample, the somatic score falls to 0.0.
-- **Deep Learning Filtering (Experimental)**: Differentiates variants from mapping artifacts using PyTorch (`DeepHistovarNet`) or Random Forest models based on MAPQ, strand bias, allele frequency, and EM posterior.
+- **Heuristic & Optional ML Filtering**: By default, scores candidate calls with a built-in heuristic based on variant allele frequency, read depth, mapping quality, and EM posterior gap (without penalizing low MAPQ on multi-mapped paralogs where `posterior_gap < 0.2`). Optionally supports loading custom pre-trained PyTorch (`DeepHistovarNet`) or scikit-learn models via `--model` and `--model-path`.
 - **Histone Filtering**: Filters for genes following histone nomenclature (`H1-H4`, `HIST...`) during GTF parsing to limit the search space.
 - **Reference & Hotspot Mapping**: Maps protein hotspots to genomic coordinates.
   - Dynamically parses GTF files to extract coding sequences (CDS) for histone genes.
@@ -106,7 +106,8 @@ apptainer run histovar.sif somatic \
 - `--min-vaf`: Minimum variant allele frequency (VAF) required to call a variant. (Default: 0.01)
 - `--pad`: Padding in base pairs around transcript boundaries to include mapping reads. (Default: 500)
 - `--indels`: Flag to enable indel (insertions and deletions) discovery. (Default: False)
-- `--model`: Machine learning engine to use for filtering (`dl` for Deep Learning, `rf` for Random Forest). (Default: `dl`)
+- `--model`: Scoring engine to use for filtering (`heuristic`, `dl`, `rf`, `boosting`, or `lr`). (Default: `heuristic`)
+- `--model-path`: Path to a pre-trained model weights file (`.pt` or `.pkl`) when using `dl`, `rf`, `boosting`, or `lr`. (Optional)
 - `--build`: Reference genome build assembly (`hg38` or `hg19`). (Default: `hg38`)
 
 ---
@@ -132,8 +133,8 @@ apptainer run histovar.sif somatic \
 ## Training Custom ML Models
 
 1. **Simulate Data**: Generate synthetic BAMs with true variants and artifacts.
-2. **Train Models**: Run training script with `MLScorer.train(X, y)`.
-3. **Deploy**: Save `.pt` or `.pkl` files and reference them in the pipeline.
+2. **Train & Save Models**: Train a model with `MLScorer(model_type="dl").train(X, y)` and save weights via `scorer.save("model.pt")`.
+3. **Deploy**: Pass `--model dl --model-path model.pt` (or `--model rf --model-path model.pkl`) to `histovar somatic`.
 
 Benchmark performance:
 ```bash

@@ -1,44 +1,97 @@
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.linear_model import LogisticRegression
+import os
+import pickle
 import numpy as np
-import torch
-import torch.nn as nn
-import torch.optim as optim
 
-class DeepHistovarNet(nn.Module):
-    def __init__(self, input_size):
-        super(DeepHistovarNet, self).__init__()
-        self.fc1 = nn.Linear(input_size, 16)
-        self.relu1 = nn.ReLU()
-        self.fc2 = nn.Linear(16, 8)
-        self.relu2 = nn.ReLU()
-        self.fc3 = nn.Linear(8, 1)
-        self.sigmoid = nn.Sigmoid()
+try:
+    from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+    from sklearn.linear_model import LogisticRegression
+    HAS_SKLEARN = True
+except ImportError:
+    HAS_SKLEARN = False
 
-    def forward(self, x):
-        x = self.relu1(self.fc1(x))
-        x = self.relu2(self.fc2(x))
-        x = self.sigmoid(self.fc3(x))
-        return x
+try:
+    import torch
+    import torch.nn as nn
+    import torch.optim as optim
+    HAS_TORCH = True
+except ImportError:
+    HAS_TORCH = False
+
+if HAS_TORCH:
+    class DeepHistovarNet(nn.Module):
+        def __init__(self, input_size):
+            super(DeepHistovarNet, self).__init__()
+            self.fc1 = nn.Linear(input_size, 16)
+            self.relu1 = nn.ReLU()
+            self.fc2 = nn.Linear(16, 8)
+            self.relu2 = nn.ReLU()
+            self.fc3 = nn.Linear(8, 1)
+            self.sigmoid = nn.Sigmoid()
+
+        def forward(self, x):
+            x = self.relu1(self.fc1(x))
+            x = self.relu2(self.fc2(x))
+            x = self.sigmoid(self.fc3(x))
+            return x
+else:
+    DeepHistovarNet = None
 
 class MLScorer:
-    def __init__(self, model_type="rf"):
+    def __init__(self, model_type="heuristic", model_path=None):
         self.model_type = model_type
         self.is_trained = False
         self.feature_names = ["depth", "af", "mapq", "strand_bias", "pos_bias", "posterior_gap"]
+        self.model = None
         
-        if model_type == "rf":
+        if model_type == "heuristic":
+            pass
+        elif model_type == "rf":
+            if not HAS_SKLEARN:
+                raise ImportError("scikit-learn is required for model_type='rf'")
             self.model = RandomForestClassifier(n_estimators=100, random_state=42)
         elif model_type == "boosting":
+            if not HAS_SKLEARN:
+                raise ImportError("scikit-learn is required for model_type='boosting'")
             self.model = GradientBoostingClassifier(n_estimators=100, random_state=42)
         elif model_type == "lr":
+            if not HAS_SKLEARN:
+                raise ImportError("scikit-learn is required for model_type='lr'")
             self.model = LogisticRegression(random_state=42)
         elif model_type == "dl":
+            if not HAS_TORCH:
+                raise ImportError("PyTorch is required for model_type='dl'")
             self.model = DeepHistovarNet(len(self.feature_names))
             self.optimizer = optim.Adam(self.model.parameters(), lr=0.01)
             self.criterion = nn.BCELoss()
         else:
-            raise ValueError("Unknown model type")
+            raise ValueError(f"Unknown model type: {model_type}")
+
+        if model_path:
+            self.load(model_path)
+
+    def save(self, path):
+        if self.model_type == "heuristic":
+            raise ValueError("Heuristic scorer has no model weights to save")
+        if self.model_type == "dl":
+            torch.save(self.model.state_dict(), path)
+        else:
+            with open(path, "wb") as f:
+                pickle.dump(self.model, f)
+
+    def load(self, path):
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Model file not found: {path}")
+        if self.model_type == "dl":
+            state = torch.load(path, map_location="cpu", weights_only=True)
+            if isinstance(state, dict):
+                self.model.load_state_dict(state)
+            else:
+                self.model = state
+            self.model.eval()
+        elif self.model_type in ("rf", "boosting", "lr"):
+            with open(path, "rb") as f:
+                self.model = pickle.load(f)
+        self.is_trained = True
 
     def _dict_to_array(self, features_list):
         X = []
@@ -48,6 +101,8 @@ class MLScorer:
         return np.array(X)
 
     def train(self, X_dicts, y):
+        if self.model_type == "heuristic":
+            raise ValueError("Cannot train model_type='heuristic'")
         X = self._dict_to_array(X_dicts)
         
         if self.model_type == "dl":

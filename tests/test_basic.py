@@ -57,16 +57,25 @@ def test_reference_builder():
     os.remove("dummy.gtf")
 
 def test_deep_learning_scorer():
-    scorer = MLScorer(model_type="dl")
-    
-    # Mock data
+    # Default scorer uses heuristic without needing a trained model
+    default_scorer = MLScorer()
+    assert default_scorer.model_type == "heuristic"
+    assert not default_scorer.is_trained
+
     X = [
         {"depth": 100, "af": 0.5, "mapq": 60, "strand_bias": 0.5, "pos_bias": 0.5, "posterior_gap": 0.9},
         {"depth": 20, "af": 0.1, "mapq": 10, "strand_bias": 0.9, "pos_bias": 0.1, "posterior_gap": 0.1}
     ]
+    h_probas = default_scorer.predict_proba(X)
+    assert len(h_probas) == 2
+    assert h_probas[0] > 0.5
+
+    # Test training loop (if torch is installed)
+    import histovar.ml as hml
+    if not hml.HAS_TORCH:
+        return
+    scorer = MLScorer(model_type="dl")
     y = [1, 0]
-    
-    # Test training loop
     scorer.train(X, y)
     assert scorer.is_trained
     
@@ -75,6 +84,14 @@ def test_deep_learning_scorer():
     assert len(probas) == 2
     assert 0.0 <= probas[0] <= 1.0
     assert 0.0 <= probas[1] <= 1.0
+
+    # Test saving and loading pre-trained model weights via model_path
+    import os
+    scorer.save("dummy_model.pt")
+    loaded = MLScorer(model_type="dl", model_path="dummy_model.pt")
+    assert loaded.is_trained
+    assert loaded.predict_proba(X) == probas
+    os.remove("dummy_model.pt")
 
 def test_codon_aa_translation():
     # Plus strand: AAG (K) -> ATG (M), AGG (R), AAA (K, synonymous), AAT (N)
